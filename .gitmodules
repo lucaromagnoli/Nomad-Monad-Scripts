@@ -1,3 +1,6 @@
 [submodule "reapy"]
 	path = reapy
 	url = git@github.com:lucaromagnoli/reapy.git
+[submodule "reaper-api"]
+	path = reaper-api
+	url = git@github.com:lucaromagnoli/reaper-api.git
