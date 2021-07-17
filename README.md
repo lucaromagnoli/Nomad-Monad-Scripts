@@ -1,2 +1,2 @@
 # Nomad-Monad-Scripts
-A collection of Reaper Scripts in Lua
+A collection of Reaper Scripts
