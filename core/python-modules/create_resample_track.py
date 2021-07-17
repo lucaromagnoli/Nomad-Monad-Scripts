@@ -6,7 +6,7 @@ from reapy import reascript_api as RPR
 Project = reapy.Project()
 
 
-class NoTrackSelectedError(ValueError):
+class ResampleError(ValueError):
     ...
 
 
@@ -30,9 +30,16 @@ class ResampleTrack(reapy.Track):
                    project=source_track.project)
 
 
+def get_selected_track() -> reapy.Track:
+    track = Project.get_selected_track(0)
+    if not track.has_valid_id:
+        raise ResampleError('No track selected')
+    if track.instrument is None:
+        raise ResampleError('Track has no instrument')
+    return track
+
+
 def create_new_rsmpl_track(parent_track: reapy.Track, route_midi: bool = True):
-    if not parent_track.has_valid_id:
-        raise NoTrackSelectedError('No track selected')
     track = ResampleTrack.from_source_track(parent_track)
     send = parent_track.add_send(track)
     if route_midi:
@@ -48,10 +55,9 @@ def create_new_rsmpl_track(parent_track: reapy.Track, route_midi: bool = True):
 
 def main():
     try:
-        sel_track = Project.get_selected_track(0)
-
+        sel_track = get_selected_track()
         create_new_rsmpl_track(sel_track)
-    except NoTrackSelectedError as e:
+    except ResampleError as e:
         reapy.show_message_box(str(e))
 
 
