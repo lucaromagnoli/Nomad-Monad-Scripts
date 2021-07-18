@@ -95,7 +95,7 @@ function Track:new(media_track --[[MediaTrack]])
 function Track:__tostring()
     return string.format(
         'Track <name=%s>',
-        self:get_name(),
+        self:get_name()
     )
 end
 
