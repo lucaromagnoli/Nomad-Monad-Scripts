@@ -9,18 +9,33 @@ local function msg(object)
 end
 
 
+local function log(...)
+    local joined = ''
+    for _, v in ipairs(arg) do
+        if joined then
+            joined = joined .. ', ' .. tostring(v)
+        else
+            joined = tostring(v)
+        end
+        msg(joined)
+    end
+end
+
+DEBUG = true
+
 -- FX
 FX = {
-    media_track = nil,
+    track = nil,
     idx = nil
 }
 
-function FX:new(media_track, idx)
-    local o = {}
+function FX:new(track, idx)
+    local o = {
+        track = track,
+        idx = idx
+    }
     setmetatable(o, self)
     self.__index = self
-    self.media_track = media_track
-    self.idx = idx
     return o
 end
 
@@ -37,14 +52,14 @@ end
 
 function FX:delete()
     -- Delete FX
-    r.TrackFX_Delete(self.media_track, self.idx)
+    r.TrackFX_Delete(self.track.media_track, self.idx)
 end
 
 
 function FX:get_name()
     -- Get FX Name
     -- @return string
-    local retval, name = r.TrackFX_GetFXName(self.media_track, self.idx, '')
+    local retval, name = r.TrackFX_GetFXName(self.track.media_track, self.idx, '')
     if retval then
         return name
     else
@@ -55,19 +70,19 @@ end
 function FX:is_enabled()
     -- Whether FX is enabled
     -- @return boolean
-    return r.TrackFX_GetEnabled(self.media_track, self.idx)
+    return r.TrackFX_GetEnabled(self.track.media_track, self.idx)
 end
 
 function FX:is_offline()
     -- Whether FX is offline
     -- @return boolean
-    return r.TrackFX_GetOffline(self.media_track, self.idx)
+    return r.TrackFX_GetOffline(self.track.media_track, self.idx)
 end
 
 function FX:is_instrument()
     -- Whether FX is a virtual instrument
     -- @return boolean
-    local inst_idx = r.TrackFX_GetInstrument(self.media_track)
+    local inst_idx = r.TrackFX_GetInstrument(self.track.media_track)
     if inst_idx == -1 then
         return false
     elseif inst_idx == self.idx then
@@ -83,28 +98,50 @@ function FX:is_instrument()
     return false
 end
 
+function FX:set_enabled(enabled)
+    -- Set FX Enable
+    r.TrackFX_SetEnabled(self.track.media_track, self.idx, enabled)
+end
+
 function FX:enable()
     -- Enable FX
-    r.TrackFX_SetEnabled(self.idx, true)
+    self:set_enabled(true)
 end
 
 function FX:disable()
     -- Disable FX
-    r.TrackFX_SetEnabled(self.idx, false)
+    self:set_enabled(false)
 end
+
+function FX:get_guid()
+    return r.TrackFX_GetFXGUID(self.track.media_track, self.idx)
+end
+
+
+function FX:set_key_value(key, value, persist)
+    -- Save the current state of fx
+    msg('in set_key_value')
+    msg(self:get_guid())
+    r.SetExtState(self:get_guid(), key, value, persist)
+end
+
+function FX:get_key_value(key)
+    -- Save the current state of fx
+    msg('in get_key_value')
+    msg(self:get_guid())
+    return r.GetExtState(self:get_guid(), key)
+end
+
 
 -- Track
 Track = {
     media_track = nil,
-    fx_chain = {}
 }
 
 function Track:new(media_track)
-    local o = {}
+    local o = {media_track = media_track}
     setmetatable(o, self)
     self.__index = self
-    self.media_track = media_track
-    self:set_fx_chain()
     return o
   end
 
@@ -128,41 +165,33 @@ function Track:fx_count()
     return r.TrackFX_GetCount(self.media_track)
 end
 
-function Track:set_fx_chain()
-    -- get all FX for a given track
-    -- @return table
-    msg('in get_fx_chain')
-    local fx_chain = {}
-    local fx_count = self:fx_count()
-    msg('self fx_count' .. fx_count)
-    for fx_idx = 0, fx_count - 1 do
-        self.fx_chain[fx_idx + 1] = FX:new(self.media_track, fx_idx)
-    end
+function Track:get_guid()
+    -- get guid
+    -- @return string
+    return r.GetTrackGUID(self.media_track)
 end
 
 function Track:get_fx_chain()
-    return self.fx_chain
+    -- get all FX for a given track
+    -- @return table
+    local fx_chain = {}
+    for fx_idx = 0, self:fx_count() - 1 do
+        local fx = FX:new(self, fx_idx)
+        -- if DEBUG then
+        --     log('get_fx_chain()', fx)
+        -- end
+        fx_chain[fx_idx + 1] = fx
+    end
+    return fx_chain
 end
 
 function Track:has_instrument()
-    for _, fx in ipairs(self.get_fx_chain()) do
+    for _, fx in ipairs(self:get_fx_chain()) do
         if fx:is_instrument() then
             return true
         end
     end
     return false
-end
-
-function Track:disable_all_fx(include_inst --[[boolean]])
-    -- disable all FX for a given track
-    -- @param include_inst: whether to disable instruments
-    for _, fx in pairs(self.get_fx_chain()) do
-        if include_inst then
-            fx:disable()
-        elseif not fx:is_instrument() then
-            fx:disable()
-        end
-    end
 end
 
 -- Project
