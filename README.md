@@ -1,2 +1,2 @@
 # Nomad-Monad-Scripts
-A collection of Reaper Scripts
+A collection of scripts for Reaper API
