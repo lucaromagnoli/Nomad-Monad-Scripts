@@ -35,12 +35,12 @@ def main():
                         take.make_active_take()
                         project.perform_action(40131)   # crop to active take
                         break
-                # sel_item.track.select()
-                # for take in sel_item.takes:
-                #     if not take.is_midi:
-                #         take.make_active_take()
-                #         project.perform_action(40131)  # # crop to active take
-                #         break
+                sel_item.track.select()
+                for take in sel_item.takes:
+                    if not take.is_midi:
+                        take.make_active_take()
+                        project.perform_action(40131)  # # crop to active take
+                        break
 
 
 
