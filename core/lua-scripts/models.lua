@@ -1,27 +1,676 @@
 -- @description OOP Implementation of Reaper API
 -- @version 0.1
 -- @author NomadMonad
-
 local r = reaper
 
-local function msg(object)
-    r.ShowConsoleMsg(tostring(object) .. '\n')
+DEBUG = true
+
+Reaper = {sep = ', '}
+
+function Reaper:new()
+    local o = {}
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
+
+function Reaper:__tostring()
+    return 'Lua ReaScript API'
+end
+
+function Reaper:console_msg(arg)
+    r.ShowConsoleMsg(tostring(arg) .. '\n')
+end
+
+function Reaper:GUID()
+    return r.genGuid('')
+end
+
+function Reaper:print(...)
+    local joined = ''
+    for i, v in ipairs({...}) do
+        if i == 1 then
+            joined = v
+        else
+            joined = joined .. self.sep .. v
+        end
+    end
+    self:console_msg(joined)
+end
+
+function Reaper:log(...)
+    self.sep = ' --- '
+    self:print(os.date(), ...)
+end
+
+-- Project
+
+Project = {}
+
+function Project:new(o)
+    -- TODO pass o?
+    o = o or {active = 0}
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
+
+function Project:__tostring()
+    return string.format('Project name=%s', self:get_name())
+end
+
+-- function Project:log(...)
+--     Reaper:log(tostring(self), ...)
+-- end
+
+-- @return string
+function Project:get_name()
+    return r.GetProjectName(self.active, '')
+end
+
+-- Get track by track count index
+-- @return Track
+function Project:get_track(idx --[[number]])
+    
+    local media_track = r.GetTrack(self.active, idx)
+    return Track:new(media_track)
+end
+
+-- @return number
+function Project:count_selected_tracks(master --[[boolean]])
+    return r.CountSelectedTracks2(self.active, master)
+end
+
+-- Get selected track by selected count index.
+-- @obj : Table : accepted value {idx = number}. Default {idx = 0}
+-- @return Track
+function Project:get_selected_track(obj)
+    obj = obj or {idx = 0}
+    local media_track = r.GetSelectedTrack(self.active, obj.idx)
+    return Track:new(media_track)
+end
+
+-- Get all selected media tracks.
+-- @obj Table : -- [[ -- may contain the key {master = true}
+                      -- (include master track, default false). ]] -
+-- @return Table{MediaTrack}
+function Project:get_selected_tracks(obj)
+    obj = obj or {master = false}
+    local media_tracks = {}
+    local count = self:count_selected_tracks(obj.master)
+    for i=0, count - 1 do
+        local media_track = self:get_selected_track({idx = i})
+        media_tracks[i + 1] = media_track
+    end
+    return media_tracks
+end
+
+-- Add track to project ad return it.
+-- @idx number
+-- @defaults boolean
+-- @return Track
+function Project:add_track(idx, defaults)
+    r.InsertTrackAtIndex(idx, defaults)
+    local track = self:get_track(idx)
+    return Track:new(track)
+end
+
+-- @return number of selected media items
+function Project:count_selected_media_items()
+    return r.CountSelectedMediaItems(self.active)
+end
+
+-- Get selected media item by count index
+-- @return MediaItem
+function Project:get_selected_media_item(idx --[[number]])
+    local sel_item = r.GetSelectedMediaItem(self.active, idx)
+    return MediaItem:new(sel_item)
+end
+
+-- Get all selected media items
+-- @return Table<MediaItem>
+function Project:get_selected_media_items()
+    local selected_media_items = {}
+    for i=0, self:count_selected_media_items() -1  do
+        local media_item = self:get_selected_media_item(i)
+        selected_media_items[i + 1] = media_item
+    end
+    return selected_media_items
+end
+
+-- Track
+Track = {
+    media_track = nil,
+}
+
+-- @return new instance of Track
+function Track:new(media_track --[[userdata]])
+    
+    local o = {media_track = media_track}
+    setmetatable(o, self)
+    self.__index = self
+    return o
+  end
+
+-- @return string
+function Track:__tostring()
+    return string.format(
+        '<Track name=%s>',
+        self:get_name()
+    )
+end
+
+-- Get track name.
+-- @return string
+function Track:get_name()
+    local _, name = r.GetTrackName(self.media_track)
+    return name
+end
+
+-- Get track numerical-value attributes.
+-- @param string
+-- Accepted param values:
+-- B_MUTE : bool * : muted
+-- B_PHASE : bool * : track phase inverted
+-- B_RECMON_IN_EFFECT : bool * : record monitoring in effect (current audio-thread playback state, read-only)
+-- IP_TRACKNUMBER : int : track number 1-based, 0=not found, -1=master track (read-only, returns the int directly)
+-- I_SOLO : int * : soloed, 0=not soloed, 1=soloed, 2=soloed in place, 5=safe soloed, 6=safe soloed in place
+-- B_SOLO_DEFEAT : bool * : when set, if anything else is soloed and this track is not muted, this track acts soloed
+-- I_FXEN : int * : fx enabled, 0=bypassed, !0=fx active
+-- I_RECARM : int * : record armed, 0=not record armed, 1=record armed
+-- I_RECINPUT : int * : record input, <0=no input. if 4096 set, input is MIDI and low 5 bits represent channel (0=all, 1-16=only chan), next 6 bits represent physical input (63=all, 62=VKB). If 4096 is not set, low 10 bits (0..1023) are input start channel (ReaRoute/Loopback start at 512). If 2048 is set, input is multichannel input (using track channel count), or if 1024 is set, input is stereo input, otherwise input is mono.
+-- I_RECMODE : int * : record mode, 0=input, 1=stereo out, 2=none, 3=stereo out w/latency compensation, 4=midi output, 5=mono out, 6=mono out w/ latency compensation, 7=midi overdub, 8=midi replace
+-- I_RECMON : int * : record monitoring, 0=off, 1=normal, 2=not when playing (tape style)
+-- I_RECMONITEMS : int * : monitor items while recording, 0=off, 1=on
+-- B_AUTO_RECARM : bool * : automatically set record arm when selected (does not immediately affect recarm state, script should set directly if desired)
+-- I_AUTOMODE : int * : track automation mode, 0=trim/off, 1=read, 2=touch, 3=write, 4=latch
+-- I_NCHAN : int * : number of track channels, 2-64, even numbers only
+-- I_SELECTED : int * : track selected, 0=unselected, 1=selected
+-- I_WNDH : int * : current TCP window height in pixels including envelopes (read-only)
+-- I_TCPH : int * : current TCP window height in pixels not including envelopes (read-only)
+-- I_TCPY : int * : current TCP window Y-position in pixels relative to top of arrange view (read-only)
+-- I_MCPX : int * : current MCP X-position in pixels relative to mixer container
+-- I_MCPY : int * : current MCP Y-position in pixels relative to mixer container
+-- I_MCPW : int * : current MCP width in pixels
+-- I_MCPH : int * : current MCP height in pixels
+-- I_FOLDERDEPTH : int * : folder depth change, 0=normal, 1=track is a folder parent, -1=track is the last in the innermost folder, -2=track is the last in the innermost and next-innermost folders, etc
+-- I_FOLDERCOMPACT : int * : folder compacted state (only valid on folders), 0=normal, 1=small, 2=tiny children
+-- I_MIDIHWOUT : int * : track midi hardware output index, <0=disabled, low 5 bits are which channels (0=all, 1-16), next 5 bits are output device index (0-31)
+-- I_PERFFLAGS : int * : track performance flags, &1=no media buffering, &2=no anticipative FX
+-- I_CUSTOMCOLOR : int * : custom color, OS dependent color|0x100000 (i.e. ColorToNative(r,g,b)|0x100000). If you do not |0x100000, then it will not be used, but will store the color
+-- I_HEIGHTOVERRIDE : int * : custom height override for TCP window, 0 for none, otherwise size in pixels
+-- B_HEIGHTLOCK : bool * : track height lock (must set I_HEIGHTOVERRIDE before locking)
+-- D_VOL : double * : trim volume of track, 0=-inf, 0.5=-6dB, 1=+0dB, 2=+6dB, etc
+-- D_PAN : double * : trim pan of track, -1..1
+-- D_WIDTH : double * : width of track, -1..1
+-- D_DUALPANL : double * : dualpan position 1, -1..1, only if I_PANMODE==6
+-- D_DUALPANR : double * : dualpan position 2, -1..1, only if I_PANMODE==6
+-- I_PANMODE : int * : pan mode, 0=classic 3.x, 3=new balance, 5=stereo pan, 6=dual pan
+-- D_PANLAW : double * : pan law of track, <0=project default, 1=+0dB, etc
+-- P_ENV:<envchunkname or P_ENV:{GUID... : TrackEnvelope * : (read-only) chunkname can be <VOLENV, <PANENV, etc; GUID is the stringified envelope GUID.
+-- B_SHOWINMIXER : bool * : track control panel visible in mixer (do not use on master track)
+-- B_SHOWINTCP : bool * : track control panel visible in arrange view (do not use on master track)
+-- B_MAINSEND : bool * : track sends audio to parent
+-- C_MAINSEND_OFFS : char * : channel offset of track send to parent
+-- B_FREEMODE : bool * : track free item positioning enabled (call UpdateTimeline() after changing)
+-- C_BEATATTACHMODE : char * : track timebase, -1=project default, 0=time, 1=beats (position, length, rate), 2=beats (position only)
+-- F_MCP_FXSEND_SCALE : float * : scale of fx+send area in MCP (0=minimum allowed, 1=maximum allowed)
+-- F_MCP_FXPARM_SCALE : float * : scale of fx parameter area in MCP (0=minimum allowed, 1=maximum allowed)
+-- F_MCP_SENDRGN_SCALE : float * : scale of send area as proportion of the fx+send total area (0=minimum allowed, 1=maximum allowed)
+-- F_TCP_FXPARM_SCALE : float * : scale of TCP parameter area when TCP FX are embedded (0=min allowed, default, 1=max allowed)
+-- I_PLAY_OFFSET_FLAG : int * : track playback offset state, &1=bypassed, &2=offset value is measured in samples (otherwise measured in seconds)
+-- D_PLAY_OFFSET : double * : track playback offset, units depend on I_PLAY_OFFSET_FLAG
+-- P_PARTRACK : MediaTrack * : parent track (read-only)
+-- P_PROJECT : ReaProject * : parent project (read-only)
+-- @return number
+function Track:get_info_number(param)
+    return r.GetMediaTrackInfo_Value(self.media_track, param)
+end
+
+-- Set track numerical-value attributes.
+-- @param string
+-- Accepted param values:
+-- B_MUTE : bool * : muted
+-- B_PHASE : bool * : track phase inverted
+-- B_RECMON_IN_EFFECT : bool * : record monitoring in effect (current audio-thread playback state, read-only)
+-- IP_TRACKNUMBER : int : track number 1-based, 0=not found, -1=master track (read-only, returns the int directly)
+-- I_SOLO : int * : soloed, 0=not soloed, 1=soloed, 2=soloed in place, 5=safe soloed, 6=safe soloed in place
+-- B_SOLO_DEFEAT : bool * : when set, if anything else is soloed and this track is not muted, this track acts soloed
+-- I_FXEN : int * : fx enabled, 0=bypassed, !0=fx active
+-- I_RECARM : int * : record armed, 0=not record armed, 1=record armed
+-- I_RECINPUT : int * : record input, <0=no input. if 4096 set, input is MIDI and low 5 bits represent channel (0=all, 1-16=only chan), next 6 bits represent physical input (63=all, 62=VKB). If 4096 is not set, low 10 bits (0..1023) are input start channel (ReaRoute/Loopback start at 512). If 2048 is set, input is multichannel input (using track channel count), or if 1024 is set, input is stereo input, otherwise input is mono.
+-- I_RECMODE : int * : record mode, 0=input, 1=stereo out, 2=none, 3=stereo out w/latency compensation, 4=midi output, 5=mono out, 6=mono out w/ latency compensation, 7=midi overdub, 8=midi replace
+-- I_RECMON : int * : record monitoring, 0=off, 1=normal, 2=not when playing (tape style)
+-- I_RECMONITEMS : int * : monitor items while recording, 0=off, 1=on
+-- B_AUTO_RECARM : bool * : automatically set record arm when selected (does not immediately affect recarm state, script should set directly if desired)
+-- I_AUTOMODE : int * : track automation mode, 0=trim/off, 1=read, 2=touch, 3=write, 4=latch
+-- I_NCHAN : int * : number of track channels, 2-64, even numbers only
+-- I_SELECTED : int * : track selected, 0=unselected, 1=selected
+-- I_WNDH : int * : current TCP window height in pixels including envelopes (read-only)
+-- I_TCPH : int * : current TCP window height in pixels not including envelopes (read-only)
+-- I_TCPY : int * : current TCP window Y-position in pixels relative to top of arrange view (read-only)
+-- I_MCPX : int * : current MCP X-position in pixels relative to mixer container
+-- I_MCPY : int * : current MCP Y-position in pixels relative to mixer container
+-- I_MCPW : int * : current MCP width in pixels
+-- I_MCPH : int * : current MCP height in pixels
+-- I_FOLDERDEPTH : int * : folder depth change, 0=normal, 1=track is a folder parent, -1=track is the last in the innermost folder, -2=track is the last in the innermost and next-innermost folders, etc
+-- I_FOLDERCOMPACT : int * : folder compacted state (only valid on folders), 0=normal, 1=small, 2=tiny children
+-- I_MIDIHWOUT : int * : track midi hardware output index, <0=disabled, low 5 bits are which channels (0=all, 1-16), next 5 bits are output device index (0-31)
+-- I_PERFFLAGS : int * : track performance flags, &1=no media buffering, &2=no anticipative FX
+-- I_CUSTOMCOLOR : int * : custom color, OS dependent color|0x100000 (i.e. ColorToNative(r,g,b)|0x100000). If you do not |0x100000, then it will not be used, but will store the color
+-- I_HEIGHTOVERRIDE : int * : custom height override for TCP window, 0 for none, otherwise size in pixels
+-- B_HEIGHTLOCK : bool * : track height lock (must set I_HEIGHTOVERRIDE before locking)
+-- D_VOL : double * : trim volume of track, 0=-inf, 0.5=-6dB, 1=+0dB, 2=+6dB, etc
+-- D_PAN : double * : trim pan of track, -1..1
+-- D_WIDTH : double * : width of track, -1..1
+-- D_DUALPANL : double * : dualpan position 1, -1..1, only if I_PANMODE==6
+-- D_DUALPANR : double * : dualpan position 2, -1..1, only if I_PANMODE==6
+-- I_PANMODE : int * : pan mode, 0=classic 3.x, 3=new balance, 5=stereo pan, 6=dual pan
+-- D_PANLAW : double * : pan law of track, <0=project default, 1=+0dB, etc
+-- P_ENV:<envchunkname or P_ENV:{GUID... : TrackEnvelope * : (read-only) chunkname can be <VOLENV, <PANENV, etc; GUID is the stringified envelope GUID.
+-- B_SHOWINMIXER : bool * : track control panel visible in mixer (do not use on master track)
+-- B_SHOWINTCP : bool * : track control panel visible in arrange view (do not use on master track)
+-- B_MAINSEND : bool * : track sends audio to parent
+-- C_MAINSEND_OFFS : char * : channel offset of track send to parent
+-- B_FREEMODE : bool * : track free item positioning enabled (call UpdateTimeline() after changing)
+-- C_BEATATTACHMODE : char * : track timebase, -1=project default, 0=time, 1=beats (position, length, rate), 2=beats (position only)
+-- F_MCP_FXSEND_SCALE : float * : scale of fx+send area in MCP (0=minimum allowed, 1=maximum allowed)
+-- F_MCP_FXPARM_SCALE : float * : scale of fx parameter area in MCP (0=minimum allowed, 1=maximum allowed)
+-- F_MCP_SENDRGN_SCALE : float * : scale of send area as proportion of the fx+send total area (0=minimum allowed, 1=maximum allowed)
+-- F_TCP_FXPARM_SCALE : float * : scale of TCP parameter area when TCP FX are embedded (0=min allowed, default, 1=max allowed)
+-- I_PLAY_OFFSET_FLAG : int * : track playback offset state, &1=bypassed, &2=offset value is measured in samples (otherwise measured in seconds)
+-- D_PLAY_OFFSET : double * : track playback offset, units depend on I_PLAY_OFFSET_FLAG
+-- P_PARTRACK : MediaTrack * : parent track (read-only)
+-- P_PROJECT : ReaProject * : parent project (read-only)
+function Track:set_info_number(param)
 end
 
 
-local function log(...)
-    local joined = ''
-    for _, v in ipairs(arg) do
-        if joined then
-            joined = joined .. ', ' .. tostring(v)
-        else
-            joined = tostring(v)
-        end
-        msg(joined)
+-- Get track index count
+-- @return number : track number 1-based, 0=not found, -1=master track (read-only, returns the int directly)
+function Track:get_index()
+    return self:get_info_number('IP_TRACKNUMBER')
+end
+
+-- Get track info values as string.
+-- Accepted param values:
+-- P_NAME : track name (on master returns NULL)
+-- P_ICON : track icon (full filename, or relative to resource_path/data/track_icons)
+-- P_MCP_LAYOUT : layout name
+-- P_RAZOREDITS : list of razor edit areas, as space-separated triples of start time, end time, and envelope GUID string.
+-- P_TCP_LAYOUT : layout name
+-- P_EXT:xyz : extension-specific persistent data
+-- GUID : globally unique identifier
+-- @return string
+function Track:get_info_string(param --[[string]])
+    local retval, info_string = r.GetSetMediaTrackInfo_String(self.media_track, param, '', false)
+    if retval then
+        return info_string
+    else
+        return nil
     end
 end
 
-DEBUG = true
+function Track:get_name()
+    local retval, info_string = r.GetSetMediaTrackInfo_String(self.media_track, 'P_NAME', '', false)
+    if retval then
+        return info_string
+    else
+        return nil
+    end
+end
+
+function Track:get_icon()
+    local retval, info_string = r.GetSetMediaTrackInfo_String(self.media_track, 'P_ICON', '', false)
+    if retval then
+        return info_string
+    else
+        return nil
+    end
+end
+
+function Track:get_mcp_layout()
+    local retval, info_string = r.GetSetMediaTrackInfo_String(self.media_track, 'P_TCP_LAYOUT', '', false)
+    if retval then
+        return info_string
+    else
+        return nil
+    end
+end
+
+function Track:get_tcp_layout()
+    local retval, info_string = r.GetSetMediaTrackInfo_String(self.media_track, 'P_MCP_LAYOUT', '', false)
+    if retval then
+        return info_string
+    else
+        return nil
+    end
+end
+
+function Track:get_key_value()
+    local retval, info_string = r.GetSetMediaTrackInfo_String(self.media_track, 'P_EXT', '', false)
+    if retval then
+        return info_string
+    else
+        return nil
+    end
+end
+
+
+-- Set track info string.
+-- Accepted param values:
+-- P_NAME : track name (on master returns NULL)
+-- P_ICON : track icon (full filename, or relative to resource_path/data/track_icons)
+-- P_MCP_LAYOUT : layout name
+-- P_RAZOREDITS : list of razor edit areas, as space-separated triples of start time, end time, and envelope GUID string.
+-- P_TCP_LAYOUT : layout name
+-- P_EXT:xyz : extension-specific persistent data
+-- GUID : globally unique identifier
+-- @return boolean
+function Track:set_info_string(param --[[string]], value --[[string]])
+    local retval, _ = r.GetSetMediaTrackInfo_String(self.media_track, param, value, true)
+    return retval
+end
+
+-- Set Track name
+-- @name string: track name
+function Track:set_name(name)
+    r:set_info_string('P_NAME', name)
+end
+
+-- Set track icon
+-- @icon string: full filename, or relative to resource_path/data/track_icons
+function Track:set_icon(name)
+    r:set_info_string('P_ICON', name)
+end
+
+-- Set MCP layout
+-- @name string: layout name
+function Track:set_mcp_layout(name)
+    r:set_info_string('P_MCP_LAYOUT', name)
+end
+
+-- Set TCP layout
+-- @name string: layout name
+function Track:set_tcp_layout(name)
+    r:set_info_string('P_TCP_LAYOUT', name)
+end
+
+-- Set razor edits
+-- @razoredits Table: -- [[ -- list of razor edit areas
+                            -- as space-separated triples of start time, end time,
+                            -- and envelope GUID string. ]] --
+function Track:set_razor_edits(razoredits)
+    r:set_info_string('P_MCP_LAYOUT', name)
+end
+
+-- Set extension-specific persistent data
+-- @ext string: extension name
+function Track:set_key_value(ext)
+    r:set_info_string('P_TCP_LAYOUT', name)
+end
+
+-- Total FX
+-- @return number
+function Track:fx_count()
+    return r.TrackFX_GetCount(self.media_track)
+end
+
+
+-- Total FX
+-- @return number
+function Track:fx_count()
+    return r.TrackFX_GetCount(self.media_track)
+end
+
+-- Get track state chunk
+-- @return string
+function Track:get_state_chunk(is_undo --[[bolean]])
+    local retval, state = r.GetTrackStateChunk(self.media_track, '', is_undo)
+    if retval then
+        return state
+    end
+end
+
+-- Get Track Globally Unique ID
+-- @return string
+function Track:GUID()
+    return r.GetTrackGUID(self.media_track)
+end
+
+-- Add media item to track and return it.
+-- @return MediaItem
+function Track:add_media_item()
+    local media_item = r.AddMediaItemToTrack(self.media_track)
+    return MediaItem:new(media_item)
+end
+
+
+-- MediaItem
+
+MediaItem = {
+    media_item = nil
+}
+
+function MediaItem:new(media_item)
+    -- MediaItem constructor
+    -- @media_item : userdata
+    local o = {media_item = media_item}
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
+
+function MediaItem:__tostring()
+    return string.format(
+        '<MediaItem GUID=%s>', self:GUID()
+    )
+end
+
+function MediaItem:GUID()
+    -- @return string
+    return r.BR_GetMediaItemGUID(self.media_item)
+end
+
+function MediaItem:get_info_value(param --[[string]])
+    -- @return string
+    return r.GetMediaItemInfo_Value(self.media_item, param)
+end
+
+
+function MediaItem:set_info_value(param --[[string]], value --[[any]])
+    -- @param : @value
+    -- B_MUTE : bool * : muted (item solo overrides). setting this value will clear C_MUTE_SOLO.
+    -- B_MUTE_ACTUAL : bool * : muted (ignores solo). setting this value will not affect C_MUTE_SOLO.
+    -- C_MUTE_SOLO : char * : solo override (-1=soloed, 0=no override, 1=unsoloed).
+        -- note that this API does not automatically unsolo other items when soloing
+        --(nor clear the unsolos when clearing the last soloed item), it must be done by the caller via action or via this API.
+    -- B_LOOPSRC : bool * : loop source
+    -- B_ALLTAKESPLAY : bool * : all takes play
+    -- B_UISEL : bool * : selected in arrange view
+    -- C_BEATATTACHMODE : char * : item timebase, -1=track or project default,
+        -- 1=beats (position, length, rate), 2=beats (position only). for auto-stretch timebase: C_BEATATTACHMODE=1, C_AUTOSTRETCH=1
+    -- C_AUTOSTRETCH: : char * : auto-stretch at project tempo changes, 1=enabled, requires C_BEATATTACHMODE=1
+    -- C_LOCK : char * : locked, &1=locked
+    -- D_VOL : double * : item volume, 0=-inf, 0.5=-6dB, 1=+0dB, 2=+6dB, etc
+    -- D_POSITION : double * : item position in seconds
+    -- D_LENGTH : double * : item length in seconds
+    -- D_SNAPOFFSET : double * : item snap offset in seconds
+    -- D_FADEINLEN : double * : item manual fadein length in seconds
+    -- D_FADEOUTLEN : double * : item manual fadeout length in seconds
+    -- D_FADEINDIR : double * : item fadein curvature, -1..1
+    -- D_FADEOUTDIR : double * : item fadeout curvature, -1..1
+    -- D_FADEINLEN_AUTO : double * : item auto-fadein length in seconds, -1=no auto-fadein
+    -- D_FADEOUTLEN_AUTO : double * : item auto-fadeout length in seconds, -1=no auto-fadeout
+    -- C_FADEINSHAPE : int * : fadein shape, 0..6, 0=linear
+    -- C_FADEOUTSHAPE : int * : fadeout shape, 0..6, 0=linear
+    -- I_GROUPID : int * : group ID, 0=no group
+    -- I_LASTY : int * : Y-position of track in pixels (read-only)
+    -- I_LASTH : int * : height in track in pixels (read-only)
+    -- I_CUSTOMCOLOR : int * : custom color, OS dependent color|0x100000 (i.e. ColorToNative(r,g,b)|0x100000).
+        -- If you do not |0x100000, then it will not be used, but will store the color
+    -- I_CURTAKE : int * : active take number
+    -- IP_ITEMNUMBER : int : item number on this track (read-only, returns the item number directly)
+    -- F_FREEMODE_Y : float * : free item positioning Y-position, 0=top of track, 1=bottom of track (will never be 1)
+    -- F_FREEMODE_H : float * : free item positioning height, 0=no height, 1=full height of track (will never be 0)
+    return r.SetMediaItemInfo_Value(self.media_item, param, value)
+end
+
+function MediaItem:set_length(length --[[number]], refreshUI --[[boolean]])
+    r.SetMediaItemLength(self.media_item, length, refreshUI)
+end
+
+function MediaItem:set_position(position --[[number]], refreshUI --[[boolean]])
+    r.SetMediaItemLength(self.media_item, position, refreshUI)
+end
+
+function MediaItem:count_takes()
+    -- @return number
+    return r.GetMediaItemNumTakes(self.media_item)
+end
+
+function MediaItem:get_take(idx --[[number]])
+    -- get take by selected idx
+    -- @return MediaItemTake
+    local take = r.GetMediaItemTake(self.media_item, idx)
+    return MediaItemTake:new(take)
+end
+
+function MediaItem:get_takes()
+    -- get all takes
+    -- @return Table<MediaItemTake>
+    local takes = {}
+    for i=0,  self:count_takes() - 1 do
+        local take = self:get_take(i)
+        local media_item_take = MediaItemTake:new(self.media_item, take)
+        takes[i + 1] = media_item_take
+    end
+    return takes
+end
+
+function MediaItem:add_take()
+    -- add take to media item and return it
+    -- @return MediaItemTake
+    local take r.AddTakeToMediaItem(self.media_item)
+    return MediaItemTake:new(take)
+end
+
+function MediaItem:get_state_chunk(is_undo --[[boolean - optional]])
+    is_undo = is_undo or false
+    local retval, chunk = r.GetItemStateChunk(self.media_item, '', is_undo)
+    if retval then
+        return chunk
+    else
+        return nil
+    end
+end
+
+-- MediaItemTake
+
+MediaItemTake = {
+    media_item = nil,
+    take = nil
+}
+
+function MediaItemTake:new(media_item, take)
+    -- @media_item: userdata
+    -- @take: userdata
+    -- @return MediaItemTake
+    local o = {
+        media_item = media_item,
+        take = take
+    }
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
+
+function MediaItemTake:__tostring()
+    return string.format('<MediaItemTake GUID=%s>', self:GUID())
+end
+
+function MediaItemTake:GUID()
+    return r.BR_GetMediaItemTakeGUID(self.take)
+end
+
+
+function MediaItemTake:get_info_value(param)
+    -- @return string
+    return r.GetMediaItemTakeInfo_Value(self.take, param)
+end
+
+function MediaItemTake:get_pcm_source()
+    -- @return PCMSource
+    local source = r.GetMediaItemTake_Source(self.take)
+    return PCMSource:new(self.take, source)
+end
+
+function MediaItemTake:set_pcm_source(source)
+    r.SetMediaItemTake_Source(self.take, source)
+end
+
+
+-- PCMSource
+
+PCMSource = {
+    media_item_take = nil,
+    pcm_source = nil
+}
+
+function PCMSource:new(take --[[userdata]], source --[[userdata]])
+    local o = {
+        media_item_take = take,
+        pcm_source = source,
+    }
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
+
+--@return string
+function PCMSource:filename()
+    return r.GetMediaSourceFileName(self.source, '')
+end
+
+--@return number
+function PCMSource:length()
+    return r.GetMediaSourceFileName(self.source, '')
+end
+
+--@return number
+function PCMSource:channels_num()
+    return r.GetMediaSourceNumChannels(self.source)
+end
+
+function PCMSource:parent()
+    -- TODO
+    return r.GetMediaSourceParent(self.source)
+end
+
+function PCMSource:sample_rate()
+    -- @return number
+    return r.GetMediaSourceSampleRate(self.source)
+end
+
+-- @return string
+function PCMSource:type()
+    return r.GetMediaSourceType(self.source, '')
+end
+
+function PCMSource:destroy()
+    r.PCM_Source_Destroy(self.source)
+end
+
+-- @return number, number, boolean on success, nil otherwise
+function PCMSource:get_section_info()
+    local retval, offset, length, is_reversed = r.PCM_Source_GetSectionInfo(self.source)
+    if retval then
+        return offset, length, is_reversed
+    else
+        return nil
+    end
+end
+
 
 -- FX
 FX = {
@@ -41,7 +690,7 @@ end
 
 function FX:__tostring()
     return string.format(
-        'FX <idx=%s, name=%s, is_instrument=%s, is_enabled=%s, is_offline=%s>',
+        '<FX idx=%s, name=%s, is_instrument=%s, is_enabled=%s, is_offline=%s>',
         self.idx,
         self:get_name(),
         self:is_instrument(),
@@ -113,86 +762,18 @@ function FX:disable()
     self:set_enabled(false)
 end
 
-function FX:get_guid()
+function FX:GUID()
+    -- @retun string
     return r.TrackFX_GetFXGUID(self.track.media_track, self.idx)
 end
 
 
 function FX:set_key_value(key, value, persist)
     -- Save the current state of fx
-    msg('in set_key_value')
-    msg(self:get_guid())
-    r.SetExtState(self:get_guid(), key, value, persist)
+    r.SetExtState(self:GUID(), key, value, persist)
 end
 
 function FX:get_key_value(key)
     -- Save the current state of fx
-    msg('in get_key_value')
-    msg(self:get_guid())
-    return r.GetExtState(self:get_guid(), key)
+    return r.GetExtState(self:GUID(), key)
 end
-
-
--- Track
-Track = {
-    media_track = nil,
-}
-
-function Track:new(media_track)
-    local o = {media_track = media_track}
-    setmetatable(o, self)
-    self.__index = self
-    return o
-  end
-
-function Track:__tostring()
-    return string.format(
-        'Track <name=%s>',
-        self:get_name()
-    )
-end
-
-function Track:get_name()
-    -- get track name
-    -- @return string
-    local _, name = r.GetTrackName(self.media_track)
-    return name
-end
-
-function Track:fx_count()
-    -- get the total number of FX for a given track
-    -- @return number
-    return r.TrackFX_GetCount(self.media_track)
-end
-
-function Track:get_guid()
-    -- get guid
-    -- @return string
-    return r.GetTrackGUID(self.media_track)
-end
-
-function Track:get_fx_chain()
-    -- get all FX for a given track
-    -- @return table
-    local fx_chain = {}
-    for fx_idx = 0, self:fx_count() - 1 do
-        local fx = FX:new(self, fx_idx)
-        -- if DEBUG then
-        --     log('get_fx_chain()', fx)
-        -- end
-        fx_chain[fx_idx + 1] = fx
-    end
-    return fx_chain
-end
-
-function Track:has_instrument()
-    for _, fx in ipairs(self:get_fx_chain()) do
-        if fx:is_instrument() then
-            return true
-        end
-    end
-    return false
-end
-
--- Project
-Project = {}
