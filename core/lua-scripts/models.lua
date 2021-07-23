@@ -130,7 +130,7 @@ function Project:new(o)
 end
 
 function Project:__tostring()
-    return string.format('Project name=%s', self:get_name())
+    return string.format('<Project name=%s>', self:get_name())
 end
 
 -- Get project name.
