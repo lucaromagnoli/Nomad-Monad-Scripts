@@ -22,6 +22,14 @@ function Reaper:console_msg(arg)
     r.ShowConsoleMsg(tostring(arg) .. '\n')
 end
 
+--[[
+    type 0=OK,1=OKCANCEL,2=ABORTRETRYIGNORE,3=YESNOCANCEL,4=YESNO,5=RETRYCANCEL
+    ret 1=OK,2=CANCEL,3=ABORT,4=RETRY,5=IGNORE,6=YES,7=NO
+]]--
+function Reaper:msg_box(msg, title, type)
+    return r.ShowMessageBox(msg, title, type)
+end
+
 function Reaper:GUID()
     return r.genGuid('')
 end
@@ -71,7 +79,6 @@ end
 -- Get track by track count index
 -- @return Track
 function Project:get_track(idx --[[number]])
-    
     local media_track = r.GetTrack(self.active, idx)
     return Track:new(media_track)
 end
@@ -111,7 +118,11 @@ end
 -- @return Track
 function Project:add_track(idx, defaults)
     r.InsertTrackAtIndex(idx, defaults)
-    local track = self:get_track(idx)
+    return self:get_track(idx)
+end
+
+function Project:track_from_guid(guid)
+    local track = r.BR_GetMediaTrackByGUID(self.active, guid)
     return Track:new(track)
 end
 
@@ -138,6 +149,22 @@ function Project:get_selected_media_items()
     return selected_media_items
 end
 
+function Project:get_key_value(section, key)
+    return r.GetExtState(section, key)
+end
+
+function Project:set_key_value(section, key, value, persist)
+    return r.SetExtState(section, key, value, persist)
+end
+
+function Project:del_key_value(section, key, persist)
+    return r.DeleteExtState(section, key, persist)
+end
+
+function Project:has_key_value(section, key)
+    return r.HasExtState(section, key)
+end
+
 -- Track
 Track = {
     media_track = nil,
@@ -158,13 +185,6 @@ function Track:__tostring()
         '<Track name=%s>',
         self:get_name()
     )
-end
-
--- Get track name.
--- @return string
-function Track:get_name()
-    local _, name = r.GetTrackName(self.media_track)
-    return name
 end
 
 -- Get track numerical-value attributes.
@@ -288,9 +308,7 @@ end
 
 -- Get track index count
 -- @return number : track number 1-based, 0=not found, -1=master track (read-only, returns the int directly)
-function Track:get_index()
-    return self:get_info_number('IP_TRACKNUMBER')
-end
+
 
 -- Get track info values as string.
 -- Accepted param values:
@@ -311,13 +329,35 @@ function Track:get_info_string(param --[[string]])
     end
 end
 
+-- Set track info values as string.
+-- Accepted param values:
+-- P_NAME : track name
+-- P_ICON : track icon (full filename, or relative to resource_path/data/track_icons)
+-- P_MCP_LAYOUT : layout name
+-- P_RAZOREDITS : list of razor edit areas, as space-separated triples of start time, end time, and envelope GUID string.
+-- P_TCP_LAYOUT : layout name
+-- P_EXT:xyz : extension-specific persistent data
+-- GUID : globally unique identifier
+-- @return boolean
+function Track:set_info_string(param --[[string]], value --[[string]])
+    local retval, _ = r.GetSetMediaTrackInfo_String(self.media_track, param, value, true)
+    return retval
+end
+
+-- Get track name.
+-- @return string
 function Track:get_name()
-    local retval, info_string = r.GetSetMediaTrackInfo_String(self.media_track, 'P_NAME', '', false)
-    if retval then
-        return info_string
-    else
-        return nil
-    end
+    local _, name = r.GetTrackName(self.media_track)
+    return name
+end
+
+
+function Track:get_index()
+    return self:get_info_number('IP_TRACKNUMBER')
+end
+
+function Track:get_color()
+    return r.GetTrackColor(self.media_track)
 end
 
 function Track:get_icon()
@@ -347,7 +387,7 @@ function Track:get_tcp_layout()
     end
 end
 
-function Track:get_key_value()
+function Track:get_key_value_store()
     local retval, info_string = r.GetSetMediaTrackInfo_String(self.media_track, 'P_EXT', '', false)
     if retval then
         return info_string
@@ -356,32 +396,22 @@ function Track:get_key_value()
     end
 end
 
-
--- Set track info string.
--- Accepted param values:
--- P_NAME : track name (on master returns NULL)
--- P_ICON : track icon (full filename, or relative to resource_path/data/track_icons)
--- P_MCP_LAYOUT : layout name
--- P_RAZOREDITS : list of razor edit areas, as space-separated triples of start time, end time, and envelope GUID string.
--- P_TCP_LAYOUT : layout name
--- P_EXT:xyz : extension-specific persistent data
--- GUID : globally unique identifier
--- @return boolean
-function Track:set_info_string(param --[[string]], value --[[string]])
-    local retval, _ = r.GetSetMediaTrackInfo_String(self.media_track, param, value, true)
-    return retval
-end
-
 -- Set Track name
 -- @name string: track name
 function Track:set_name(name)
-    r:set_info_string('P_NAME', name)
+    self:set_info_string('P_NAME', name)
 end
 
--- Set track icon
+-- Set Track icon
 -- @icon string: full filename, or relative to resource_path/data/track_icons
-function Track:set_icon(name)
-    r:set_info_string('P_ICON', name)
+function Track:set_color(color)
+    r.SetTrackColor(self.media_item, color)
+end
+
+-- Set Track color
+-- @icon string: full filename, or relative to resource_path/data/track_icons
+function Track:set_color(name)
+    self:set_info_string('P_ICON', name)
 end
 
 -- Set MCP layout
@@ -419,7 +449,7 @@ end
 
 -- Total FX
 -- @return number
-function Track:fx_count()
+function Track:get_fx_chain()
     return r.TrackFX_GetCount(self.media_track)
 end
 
@@ -467,52 +497,51 @@ function MediaItem:__tostring()
     )
 end
 
+-- @return string
 function MediaItem:GUID()
-    -- @return string
     return r.BR_GetMediaItemGUID(self.media_item)
 end
 
+ -- @return string
 function MediaItem:get_info_value(param --[[string]])
-    -- @return string
     return r.GetMediaItemInfo_Value(self.media_item, param)
 end
 
 
+-- Set media item numerical-value attributes
+-- Accepted params
+-- B_MUTE : bool * : muted (item solo overrides). setting this value will clear C_MUTE_SOLO.
+-- B_MUTE_ACTUAL : bool * : muted (ignores solo). setting this value will not affect C_MUTE_SOLO.
+-- C_MUTE_SOLO : char * : solo override (-1=soloed, 0=no override, 1=unsoloed).
+-- B_LOOPSRC : bool * : loop source
+-- B_ALLTAKESPLAY : bool * : all takes play
+-- B_UISEL : bool * : selected in arrange view
+-- C_BEATATTACHMODE : char * : item timebase, -1=track or project default, 1=beats (position, length, rate),
+    -- 2=beats (position only). for auto-stretch timebase: C_BEATATTACHMODE=1, C_AUTOSTRETCH=1
+-- C_AUTOSTRETCH: : char * : auto-stretch at project tempo changes, 1=enabled, requires C_BEATATTACHMODE=1
+-- C_LOCK : char * : locked, &1=locked
+-- D_VOL : double * : item volume, 0=-inf, 0.5=-6dB, 1=+0dB, 2=+6dB, etc
+-- D_POSITION : double * : item position in seconds
+-- D_LENGTH : double * : item length in seconds
+-- D_SNAPOFFSET : double * : item snap offset in seconds
+-- D_FADEINLEN : double * : item manual fadein length in seconds
+-- D_FADEOUTLEN : double * : item manual fadeout length in seconds
+-- D_FADEINDIR : double * : item fadein curvature, -1..1
+-- D_FADEOUTDIR : double * : item fadeout curvature, -1..1
+-- D_FADEINLEN_AUTO : double * : item auto-fadein length in seconds, -1=no auto-fadein
+-- D_FADEOUTLEN_AUTO : double * : item auto-fadeout length in seconds, -1=no auto-fadeout
+-- C_FADEINSHAPE : int * : fadein shape, 0..6, 0=linear
+-- C_FADEOUTSHAPE : int * : fadeout shape, 0..6, 0=linear
+-- I_GROUPID : int * : group ID, 0=no group
+-- I_LASTY : int * : Y-position of track in pixels (read-only)
+-- I_LASTH : int * : height in track in pixels (read-only)
+-- I_CUSTOMCOLOR : int * : custom color, OS dependent color|0x100000 (i.e. ColorToNative(r,g,b)|0x100000).
+    -- If you do not |0x100000, then it will not be used, but will store the color
+-- I_CURTAKE : int * : active take number
+-- IP_ITEMNUMBER : int : item number on this track (read-only, returns the item number directly)
+-- F_FREEMODE_Y : float * : free item positioning Y-position, 0=top of track, 1=bottom of track (will never be 1)
+-- F_FREEMODE_H : float * : free item positioning height, 0=no height, 1=full height of track (will never be 0)
 function MediaItem:set_info_value(param --[[string]], value --[[any]])
-    -- @param : @value
-    -- B_MUTE : bool * : muted (item solo overrides). setting this value will clear C_MUTE_SOLO.
-    -- B_MUTE_ACTUAL : bool * : muted (ignores solo). setting this value will not affect C_MUTE_SOLO.
-    -- C_MUTE_SOLO : char * : solo override (-1=soloed, 0=no override, 1=unsoloed).
-        -- note that this API does not automatically unsolo other items when soloing
-        --(nor clear the unsolos when clearing the last soloed item), it must be done by the caller via action or via this API.
-    -- B_LOOPSRC : bool * : loop source
-    -- B_ALLTAKESPLAY : bool * : all takes play
-    -- B_UISEL : bool * : selected in arrange view
-    -- C_BEATATTACHMODE : char * : item timebase, -1=track or project default,
-        -- 1=beats (position, length, rate), 2=beats (position only). for auto-stretch timebase: C_BEATATTACHMODE=1, C_AUTOSTRETCH=1
-    -- C_AUTOSTRETCH: : char * : auto-stretch at project tempo changes, 1=enabled, requires C_BEATATTACHMODE=1
-    -- C_LOCK : char * : locked, &1=locked
-    -- D_VOL : double * : item volume, 0=-inf, 0.5=-6dB, 1=+0dB, 2=+6dB, etc
-    -- D_POSITION : double * : item position in seconds
-    -- D_LENGTH : double * : item length in seconds
-    -- D_SNAPOFFSET : double * : item snap offset in seconds
-    -- D_FADEINLEN : double * : item manual fadein length in seconds
-    -- D_FADEOUTLEN : double * : item manual fadeout length in seconds
-    -- D_FADEINDIR : double * : item fadein curvature, -1..1
-    -- D_FADEOUTDIR : double * : item fadeout curvature, -1..1
-    -- D_FADEINLEN_AUTO : double * : item auto-fadein length in seconds, -1=no auto-fadein
-    -- D_FADEOUTLEN_AUTO : double * : item auto-fadeout length in seconds, -1=no auto-fadeout
-    -- C_FADEINSHAPE : int * : fadein shape, 0..6, 0=linear
-    -- C_FADEOUTSHAPE : int * : fadeout shape, 0..6, 0=linear
-    -- I_GROUPID : int * : group ID, 0=no group
-    -- I_LASTY : int * : Y-position of track in pixels (read-only)
-    -- I_LASTH : int * : height in track in pixels (read-only)
-    -- I_CUSTOMCOLOR : int * : custom color, OS dependent color|0x100000 (i.e. ColorToNative(r,g,b)|0x100000).
-        -- If you do not |0x100000, then it will not be used, but will store the color
-    -- I_CURTAKE : int * : active take number
-    -- IP_ITEMNUMBER : int : item number on this track (read-only, returns the item number directly)
-    -- F_FREEMODE_Y : float * : free item positioning Y-position, 0=top of track, 1=bottom of track (will never be 1)
-    -- F_FREEMODE_H : float * : free item positioning height, 0=no height, 1=full height of track (will never be 0)
     return r.SetMediaItemInfo_Value(self.media_item, param, value)
 end
 
@@ -524,21 +553,21 @@ function MediaItem:set_position(position --[[number]], refreshUI --[[boolean]])
     r.SetMediaItemLength(self.media_item, position, refreshUI)
 end
 
+-- @return number
 function MediaItem:count_takes()
-    -- @return number
     return r.GetMediaItemNumTakes(self.media_item)
 end
 
+-- Get take by selected idx
+-- @return MediaItemTake
 function MediaItem:get_take(idx --[[number]])
-    -- get take by selected idx
-    -- @return MediaItemTake
     local take = r.GetMediaItemTake(self.media_item, idx)
     return MediaItemTake:new(take)
 end
 
+-- Get all takes
+-- @return Table<MediaItemTake>
 function MediaItem:get_takes()
-    -- get all takes
-    -- @return Table<MediaItemTake>
     local takes = {}
     for i=0,  self:count_takes() - 1 do
         local take = self:get_take(i)
@@ -548,9 +577,9 @@ function MediaItem:get_takes()
     return takes
 end
 
+-- Add take to media item and return it
+-- @return MediaItemTake
 function MediaItem:add_take()
-    -- add take to media item and return it
-    -- @return MediaItemTake
     local take r.AddTakeToMediaItem(self.media_item)
     return MediaItemTake:new(take)
 end
@@ -572,10 +601,10 @@ MediaItemTake = {
     take = nil
 }
 
+-- @media_item: userdata
+-- @take: userdata
+-- @return MediaItemTake
 function MediaItemTake:new(media_item, take)
-    -- @media_item: userdata
-    -- @take: userdata
-    -- @return MediaItemTake
     local o = {
         media_item = media_item,
         take = take
@@ -593,14 +622,13 @@ function MediaItemTake:GUID()
     return r.BR_GetMediaItemTakeGUID(self.take)
 end
 
-
+-- @return string
 function MediaItemTake:get_info_value(param)
-    -- @return string
     return r.GetMediaItemTakeInfo_Value(self.take, param)
 end
 
+-- @return PCMSource
 function MediaItemTake:get_pcm_source()
-    -- @return PCMSource
     local source = r.GetMediaItemTake_Source(self.take)
     return PCMSource:new(self.take, source)
 end
@@ -642,13 +670,13 @@ function PCMSource:channels_num()
     return r.GetMediaSourceNumChannels(self.source)
 end
 
+-- TODO
 function PCMSource:parent()
-    -- TODO
     return r.GetMediaSourceParent(self.source)
 end
 
+-- @return number
 function PCMSource:sample_rate()
-    -- @return number
     return r.GetMediaSourceSampleRate(self.source)
 end
 
@@ -699,15 +727,15 @@ function FX:__tostring()
     )
 end
 
+-- Delete FX
 function FX:delete()
-    -- Delete FX
     r.TrackFX_Delete(self.track.media_track, self.idx)
 end
 
 
+-- Get FX Name
+-- @return string
 function FX:get_name()
-    -- Get FX Name
-    -- @return string
     local retval, name = r.TrackFX_GetFXName(self.track.media_track, self.idx, '')
     if retval then
         return name
@@ -747,33 +775,33 @@ function FX:is_instrument()
     return false
 end
 
+-- Set FX Enable
 function FX:set_enabled(enabled)
-    -- Set FX Enable
     r.TrackFX_SetEnabled(self.track.media_track, self.idx, enabled)
 end
 
+-- Enable FX
 function FX:enable()
-    -- Enable FX
     self:set_enabled(true)
 end
 
+-- Disable FX
 function FX:disable()
-    -- Disable FX
     self:set_enabled(false)
 end
 
+-- @retun string
 function FX:GUID()
-    -- @retun string
     return r.TrackFX_GetFXGUID(self.track.media_track, self.idx)
 end
 
 
+-- Set FX key-value store
 function FX:set_key_value(key, value, persist)
-    -- Save the current state of fx
     r.SetExtState(self:GUID(), key, value, persist)
 end
 
+-- Get FX key-value store
 function FX:get_key_value(key)
-    -- Save the current state of fx
     return r.GetExtState(self:GUID(), key)
 end
