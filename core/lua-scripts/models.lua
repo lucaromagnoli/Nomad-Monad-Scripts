@@ -174,7 +174,6 @@ function Project:get_selected_tracks(obj)
     local count = self:count_selected_tracks(obj.master)
     for i=0, count - 1 do
         local track = self:get_selected_track({idx = i})
-        Reaper:print('in get_selected_tracks', tostring(track))
         tracks[i + 1] = track
     end
     return tracks
@@ -513,15 +512,24 @@ function Track:get_fx_chain()
     local fx_chain = {}
     for i=0, self:get_fx_count() - 1 do
         local fx = TrackFX:new(self, i)
-        fx_chain[i] = fx
+        fx_chain[i + 1] = fx
     end
     return fx_chain
+end
+
+function Track:has_instrument()
+    for _, fx in ipairs(self:get_fx_chain()) do
+        if fx:is_instrument() then
+            return true
+        end
+    end
+    return false
 end
 
 
 -- Get track state chunk
 -- @return string
-function Track:get_state_chunk(is_undo --[[bolean]])
+function Track:get_state_chunk(is_undo --[[boolean]])
     local retval, state = r.GetTrackStateChunk(self.media_track, '', is_undo)
     if retval then
         return state
@@ -590,7 +598,7 @@ function Track:add_media_item()
     return MediaItem:new(media_item)
 end
 
--- FX
+-- TrackFX
 TrackFX = BaseModel:new()
 
 function TrackFX:new(track, idx)
@@ -623,7 +631,6 @@ end
 -- @return string
 function TrackFX:get_name()
     local retval, name = r.TrackFX_GetFXName(self.track.media_track, self.idx, '')
-    Reaper:log(name)
     if retval then
         return name
     else
