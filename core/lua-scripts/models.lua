@@ -590,6 +590,123 @@ function Track:add_media_item()
     return MediaItem:new(media_item)
 end
 
+-- FX
+TrackFX = BaseModel:new()
+
+function TrackFX:new(track, idx)
+    local o = {
+        track = track,
+        idx = idx
+    }
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
+
+function TrackFX:__tostring()
+    return string.format(
+        '<FX idx=%s, name=%s, is_instrument=%s, is_enabled=%s, is_offline=%s>',
+        self.idx,
+        self:get_name(),
+        self:is_instrument(),
+        self:is_enabled(),
+        self:is_offline()
+    )
+end
+
+-- Delete FX
+function TrackFX:delete()
+    r.TrackFX_Delete(self.track.media_track, self.idx)
+end
+
+-- Get FX Name
+-- @return string
+function TrackFX:get_name()
+    local retval, name = r.TrackFX_GetFXName(self.track.media_track, self.idx, '')
+    Reaper:log(name)
+    if retval then
+        return name
+    else
+        return nil
+    end
+end
+
+-- Whether FX is enabled
+-- @return boolean
+function TrackFX:is_enabled()
+    return r.TrackFX_GetEnabled(self.track.media_track, self.idx)
+end
+
+-- Whether FX is offline
+-- @return boolean
+function TrackFX:is_offline()
+    return r.TrackFX_GetOffline(self.track.media_track, self.idx)
+end
+
+-- Whether FX is a virtual instrument
+-- @return boolean
+function TrackFX:is_instrument()
+    local inst_idx = r.TrackFX_GetInstrument(self.track.media_track)
+    if inst_idx == -1 then
+        return false
+    elseif inst_idx == self.idx then
+        return true
+    end
+    local patterns = {'VSTi', 'VST3i', 'AUi'}
+    local name = self:get_name()
+    for _, p in pairs(patterns) do
+        if name:find(p) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Set FX Enable
+function TrackFX:set_enabled(enabled)
+    r.TrackFX_SetEnabled(self.track.media_track, self.idx, enabled)
+end
+
+-- Enable FX
+function TrackFX:enable()
+    self:set_enabled(true)
+end
+
+-- Disable FX
+function TrackFX:disable()
+    self:set_enabled(false)
+end
+
+-- FX globally unique identifier
+-- @return string
+function TrackFX:GUID()
+    return r.TrackFX_GetFXGUID(self.track.media_track, self.idx)
+end
+
+-- Set FX key-value store
+function TrackFX:set_key_value(key, value, persist)
+    r.SetExtState(self:GUID(), key, value, persist)
+end
+
+-- Get FX key-value store
+function TrackFX:get_key_value(key)
+    return r.GetExtState(self:GUID(), key)
+end
+
+-- Copy FX to track
+function TrackFX:copy_to_track(dest_track, dest_index)
+    r.TrackFX_CopyToTrack(self.track.media_track, self.index, dest_track, dest_index, false)
+end
+
+-- Move FX to track
+function TrackFX:move_to_track(dest_track, dest_index)
+    r.TrackFX_CopyToTrack(self.track.media_track, self.index, dest_track, dest_index, true)
+end
+
+-- Delete FX from track
+function TrackFX:delete()
+     reaper.TrackFX_Delete(self.track.media_track, self.index)
+end
 
 -- MediaItem
 
@@ -807,123 +924,4 @@ function PCMSource:get_section_info()
     else
         return nil
     end
-end
-
-
--- FX
-TrackFX = BaseModel:new()
-
-function TrackFX:new(track, idx)
-    local o = {
-        track = track,
-        idx = idx
-    }
-    setmetatable(o, self)
-    self.__index = self
-    return o
-end
-
-function TrackFX:__tostring()
-    return string.format(
-        '<FX idx=%s, name=%s, is_instrument=%s, is_enabled=%s, is_offline=%s>',
-        self.idx,
-        self:get_name(),
-        self:is_instrument(),
-        self:is_enabled(),
-        self:is_offline()
-    )
-end
-
--- Delete FX
-function TrackFX:delete()
-    r.TrackFX_Delete(self.track.media_track, self.idx)
-end
-
--- Get FX Name
--- @return string
-function TrackFX:get_name()
-    local retval, name = r.TrackFX_GetFXName(self.track.media_track, self.idx, '')
-    Reaper:log(name)
-    if retval then
-        return name
-    else
-        return nil
-    end
-end
-
--- Whether FX is enabled
--- @return boolean
-function TrackFX:is_enabled()
-    return r.TrackFX_GetEnabled(self.track.media_track, self.idx)
-end
-
--- Whether FX is offline
--- @return boolean
-function TrackFX:is_offline()
-    return r.TrackFX_GetOffline(self.track.media_track, self.idx)
-end
-
--- Whether FX is a virtual instrument
--- @return boolean
-function TrackFX:is_instrument()
-    local inst_idx = r.TrackFX_GetInstrument(self.track.media_track)
-    if inst_idx == -1 then
-        return false
-    elseif inst_idx == self.idx then
-        return true
-    end
-    local patterns = {'VSTi', 'VST3i', 'AUi'}
-    local name = self:get_name()
-    for _, p in pairs(patterns) do
-        if name:find(p) then
-            return true
-        end
-    end
-    return false
-end
-
--- Set FX Enable
-function TrackFX:set_enabled(enabled)
-    r.TrackFX_SetEnabled(self.track.media_track, self.idx, enabled)
-end
-
--- Enable FX
-function TrackFX:enable()
-    self:set_enabled(true)
-end
-
--- Disable FX
-function TrackFX:disable()
-    self:set_enabled(false)
-end
-
--- FX globally unique identifier
--- @return string
-function TrackFX:GUID()
-    return r.TrackFX_GetFXGUID(self.track.media_track, self.idx)
-end
-
--- Set FX key-value store
-function TrackFX:set_key_value(key, value, persist)
-    r.SetExtState(self:GUID(), key, value, persist)
-end
-
--- Get FX key-value store
-function TrackFX:get_key_value(key)
-    return r.GetExtState(self:GUID(), key)
-end
-
--- Copy FX to track
-function TrackFX:copy_to_track(dest_track, dest_index)
-    r.TrackFX_CopyToTrack(self.track.media_track, self.index, dest_track, dest_index, false)
-end
-
--- Move FX to track
-function TrackFX:move_to_track(dest_track, dest_index)
-    r.TrackFX_CopyToTrack(self.track.media_track, self.index, dest_track, dest_index, true)
-end
-
--- Delete FX from track
-function TrackFX:delete()
-     reaper.TrackFX_Delete(self.track.media_track, self.index)
 end
