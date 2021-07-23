@@ -5,7 +5,9 @@ local r = reaper
 
 DEBUG = true
 
-Reaper = {sep = ', '}
+Sep = ', '
+
+Reaper = {}
 
 function Reaper:new()
     local o = {}
@@ -15,7 +17,7 @@ function Reaper:new()
 end
 
 function Reaper:__tostring()
-    return 'Lua OOP ReaScript library'
+    return 'ReaLoop - Lua OOP ReaScript library'
 end
 
 function Reaper:console_msg(arg)
@@ -44,11 +46,11 @@ end
 -- @{...} string
 function Reaper:print(...)
     local joined = ''
-    for i, v in ipairs({...}) do
+    for i, v in ipairs({ ... }) do
         if i == 1 then
             joined = v
         else
-            joined = joined .. self.sep .. v
+            joined = joined .. Sep .. v
         end
     end
     self:console_msg(joined)
@@ -87,7 +89,7 @@ function Reaper:apply_fx(opt)
         self:action(40361, 0) -- mono output
     elseif opt == 2 then
         self:action(41993, 0) -- multi output
-    elseif opt == 3  then
+    elseif opt == 3 then
         self:action(40436, 0) -- MIDI output
     end
 end
@@ -102,26 +104,26 @@ function Reaper:undo(description, func, ...)
     r.Undo_EndBlock(description, -1)
 end
 
-BaseModel = {}
+ReaLoopBaseModel = {}
 
-function BaseModel:new()
+function ReaLoopBaseModel:new()
     local o = {}
     setmetatable(o, self)
     self.__index = self
     return o
 end
 
-function BaseModel:log(...)
+function ReaLoopBaseModel:log(...)
     Reaper:log(...)
 end
 
 -- Project
 
-Project = BaseModel:new()
+Project = ReaLoopBaseModel:new()
 
 -- Create new Project instance.
 function Project:new(o)
-    o = o or {active = 0}
+    o = o or { active = 0 }
     setmetatable(o, self)
     self.__index = self
     return o
@@ -157,7 +159,7 @@ end
 --]]
 -- @return Track
 function Project:get_selected_track(obj)
-    obj = obj or {idx = 0}
+    obj = obj or { idx = 0 }
     local media_track = r.GetSelectedTrack(self.active, obj.idx)
     return Track:new(media_track)
 end
@@ -169,11 +171,11 @@ end
 --]]
 -- @return Table<MediaTrack>
 function Project:get_selected_tracks(obj)
-    obj = obj or {master = false}
+    obj = obj or { master = false }
     local tracks = {}
     local count = self:count_selected_tracks(obj.master)
-    for i=0, count - 1 do
-        local track = self:get_selected_track({idx = i})
+    for i = 0, count - 1 do
+        local track = self:get_selected_track({ idx = i })
         tracks[i + 1] = track
     end
     return tracks
@@ -213,7 +215,7 @@ end
 -- @return Table<MediaItem>
 function Project:get_selected_media_items()
     local selected_media_items = {}
-    for i=0, self:count_selected_media_items() -1  do
+    for i = 0, self:count_selected_media_items() - 1 do
         local media_item = self:get_selected_media_item(i)
         selected_media_items[i + 1] = media_item
     end
@@ -254,23 +256,23 @@ function Project:has_key_value(section, key)
 end
 
 -- Track
-Track = BaseModel:new()
+Track = ReaLoopBaseModel:new()
 
 -- Create new instance of Track
 -- @media_track userdata : Pointer to Reaper MediaTrack
 -- @return Track
 function Track:new(media_track --[[userdata]])
-    local o = {media_track = media_track}
+    local o = { media_track = media_track }
     setmetatable(o, self)
     self.__index = self
     return o
-  end
+end
 
 -- @return string
 function Track:__tostring()
     return string.format(
-        '<Track name=%s>',
-        self:get_name()
+            '<Track name=%s>',
+            self:get_name()
     )
 end
 
@@ -510,7 +512,7 @@ end
 -- @return Table<FX>
 function Track:get_fx_chain()
     local fx_chain = {}
-    for i=0, self:get_fx_count() - 1 do
+    for i = 0, self:get_fx_count() - 1 do
         local fx = TrackFX:new(self, i)
         fx_chain[i + 1] = fx
     end
@@ -599,7 +601,7 @@ function Track:add_media_item()
 end
 
 -- TrackFX
-TrackFX = BaseModel:new()
+TrackFX = ReaLoopBaseModel:new()
 
 function TrackFX:new(track, idx)
     local o = {
@@ -613,12 +615,12 @@ end
 
 function TrackFX:__tostring()
     return string.format(
-        '<FX idx=%s, name=%s, is_instrument=%s, is_enabled=%s, is_offline=%s>',
-        self.idx,
-        self:get_name(),
-        self:is_instrument(),
-        self:is_enabled(),
-        self:is_offline()
+            '<FX idx=%s, name=%s, is_instrument=%s, is_enabled=%s, is_offline=%s>',
+            self.idx,
+            self:get_name(),
+            self:is_instrument(),
+            self:is_enabled(),
+            self:is_offline()
     )
 end
 
@@ -659,7 +661,7 @@ function TrackFX:is_instrument()
     elseif inst_idx == self.idx then
         return true
     end
-    local patterns = {'VSTi', 'VST3i', 'AUi'}
+    local patterns = { 'VSTi', 'VST3i', 'AUi' }
     local name = self:get_name()
     for _, p in pairs(patterns) do
         if name:find(p) then
@@ -712,17 +714,17 @@ end
 
 -- Delete FX from track
 function TrackFX:delete()
-     reaper.TrackFX_Delete(self.track.media_track, self.index)
+    reaper.TrackFX_Delete(self.track.media_track, self.index)
 end
 
 -- MediaItem
 
-MediaItem = BaseModel:new()
+MediaItem = ReaLoopBaseModel:new()
 
 function MediaItem:new(media_item)
     -- MediaItem constructor
     -- @media_item : userdata
-    local o = {media_item = media_item}
+    local o = { media_item = media_item }
     setmetatable(o, self)
     self.__index = self
     return o
@@ -730,7 +732,7 @@ end
 
 function MediaItem:__tostring()
     return string.format(
-        '<MediaItem GUID=%s>', self:GUID()
+            '<MediaItem GUID=%s>', self:GUID()
     )
 end
 
@@ -739,7 +741,7 @@ function MediaItem:GUID()
     return r.BR_GetMediaItemGUID(self.media_item)
 end
 
- -- @return string
+-- @return string
 function MediaItem:get_info_value(param --[[string]])
     return r.GetMediaItemInfo_Value(self.media_item, param)
 end
@@ -809,7 +811,7 @@ end
 -- @return Table<MediaItemTake>
 function MediaItem:get_takes()
     local takes = {}
-    for i=0,  self:count_takes() - 1 do
+    for i = 0, self:count_takes() - 1 do
         local take = self:get_take(i)
         local media_item_take = MediaItemTake:new(self.media_item, take)
         takes[i + 1] = media_item_take
@@ -820,7 +822,8 @@ end
 -- Add take to media item and return it
 -- @return MediaItemTake
 function MediaItem:add_take()
-    local take r.AddTakeToMediaItem(self.media_item)
+    local take
+    r.AddTakeToMediaItem(self.media_item)
     return MediaItemTake:new(take)
 end
 
@@ -836,7 +839,7 @@ end
 
 -- MediaItemTake
 
-MediaItemTake = BaseModel:new()
+MediaItemTake = ReaLoopBaseModel:new()
 
 -- @media_item: userdata
 -- @take: userdata
@@ -877,7 +880,7 @@ end
 
 -- PCMSource
 
-PCMSource = BaseModel:new()
+PCMSource = ReaLoopBaseModel:new()
 
 function PCMSource:new(take --[[userdata]], source --[[userdata]])
     local o = {
@@ -923,11 +926,15 @@ function PCMSource:destroy()
     r.PCM_Source_Destroy(self.source)
 end
 
--- @return number, number, boolean on success, nil otherwise
+-- Get section info
+--[[
+    @return : a Table with 3 items (number, number, boolean) on success,
+    nil otherwise
+--]]
 function PCMSource:get_section_info()
     local retval, offset, length, is_reversed = r.PCM_Source_GetSectionInfo(self.source)
     if retval then
-        return offset, length, is_reversed
+        return { offset, length, is_reversed }
     else
         return nil
     end
