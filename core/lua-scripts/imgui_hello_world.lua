@@ -7,7 +7,7 @@ require('models')
 
 local r = Reaper:new()
 local project = Project:new()
-local gui = ImGui:new('RSMPL', 'sans-serif', 500, 200)
+local gui = ImGui:new('ImGuiHelloWorld', 'sans-serif', 500, 200)
 
 
 function Frame()
@@ -38,22 +38,6 @@ function Menu()
     end
 end
 
---local window_flags = reaper.ImGui_WindowFlags_MenuBar() |
---                     reaper.ImGui_WindowFlags_NoDecoration()
---r:print(window_flags)
---loop = gui:loop(Frame, 'My Script', true, window_flags)
---reaper.defer(loop)
---
---
-
---reaper.ImGui_SetNextWindowPos(ctx, 0, 0)
---reaper.ImGui_SetNextWindowSize(ctx, reaper.ImGui_GetDisplaySize(ctx))
---reaper.ImGui_Begin(ctx, 'Window', nil, window_flags)
---
-local ctx = reaper.ImGui_CreateContext('My script')
-local size = reaper.GetAppVersion():match('OSX') and 12 or 14
-local font = reaper.ImGui_CreateFont('sans-serif', size)
-reaper.ImGui_AttachFont(ctx, font)
 
 click_count, text = 0, 'The quick brown fox jumps over the lazy dog'
 
@@ -72,5 +56,18 @@ function frame(ctx)
   rv, text = reaper.ImGui_InputText(ctx, 'text input', text)
 end
 
-loop = gui:loop(frame, 'ImGuiHelloWorld')
+function menu(ctx)
+  if reaper.ImGui_BeginMenu(ctx, 'File') then
+    if reaper.ImGui_MenuItem(ctx, 'Open') then
+      reaper.ShowConsoleMsg('opening...\n')
+    end
+    if reaper.ImGui_MenuItem(ctx, 'Save') then
+      reaper.ShowConsoleMsg('saving...\n')
+    end
+    reaper.ImGui_EndMenu(ctx)
+  end
+end
+
+
+loop = gui:loop(menu)
 reaper.defer(loop)
