@@ -984,6 +984,14 @@ function ImGui:get_app_version()
     return r.GetAppVersion()
 end
 
+function ImGui:create_context(label)
+    return r.ImGui_CreateContext(label)
+end
+
+function ImGui:destroy_context()
+    r.ImGui_DestroyContext(self.ctx)
+end
+
 function ImGui:create_font(font_name, size)
      return r.ImGui_CreateFont(font_name, size)
 end
@@ -1000,9 +1008,6 @@ function ImGui:pop_font()
     r.ImGui_PopFont(self.ctx)
 end
 
-function ImGui:create_context(label)
-    return r.ImGui_CreateContext(label)
-end
 
 --[[
     Set the variable if the object/window has no persistently saved data
@@ -1058,9 +1063,7 @@ function ImGui:window_context(label, p_open)
     end
 end
 
-function ImGui:destroy_context()
-    r.ImGui_DestroyContext(self.ctx)
-end
+
 
 function ImGui:loop(func)
     function loop()
