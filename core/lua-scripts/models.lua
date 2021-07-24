@@ -1041,10 +1041,8 @@ end
     @return boolean : whether window is visible
     @return boolean : whether window is open
 --]]
-function ImGui:begin_window(label, p_open)
-    label = label or self.label
-    p_open = p_open or true
-    return r.ImGui_Begin(self.ctx, self.label, p_open)
+function ImGui:begin_window()
+    return r.ImGui_Begin(self.ctx, self.label, true)
 end
 
 -- Pop window from the stack. See ImGui:begin_window
@@ -1052,8 +1050,8 @@ function ImGui:end_window()
     r.ImGui_End(self.ctx)
 end
 
-function ImGui:window_context(label, p_open)
-    local visible, open = self:begin_window(label, p_open)
+function ImGui:window_context()
+    local visible, open = self:begin_window()
     return function(func)
         if visible then
             func(self.ctx)
@@ -1063,7 +1061,23 @@ function ImGui:window_context(label, p_open)
     end
 end
 
+function ImGui:button(label, size_wIn, size_hIn)
+     return r.ImGui_Button(self.ctx,label, size_wIn, size_hIn)
+end
 
+function ImGui:text(text, mode, col_rgba)
+    mode = mode or 0
+    if mode == 0 then
+        r.ImGui_Text(self.ctx, text)
+    elseif mode == 1 then
+        r.ImGui_TextColored(self.ctx, col_rgba, text)
+    elseif mode == 2 then
+        r.ImGui_TextDisabled(self.ctx, text)
+    elseif mode == 3 then
+        r.ImGui_TextWrapped(self.ctx, text)
+    end
+
+end
 
 function ImGui:loop(func)
     function loop()
