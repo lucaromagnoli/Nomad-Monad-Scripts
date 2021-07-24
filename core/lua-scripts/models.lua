@@ -1039,6 +1039,17 @@ function ImGui:end_window()
     r.ImGui_End(self.ctx)
 end
 
+function ImGui:window_context(label, p_open)
+    local visible, open = self:begin_window(label, p_open)
+    return function(func)
+        if visible then
+            func(self.ctx)
+            self:end_window()
+        end
+        return open
+    end
+end
+
 function ImGui:destroy_context()
     r.ImGui_DestroyContext(self.ctx)
 end
@@ -1048,11 +1059,8 @@ function ImGui:loop(func)
         self:attach_font()
         self:push_font()
         self:set_next_window_size()
-        local visible, open = self:begin_window()
-        if visible then
-            func(self.ctx)
-            self:end_window()
-        end
+        local window = self:window_context()
+        local open = window(func)
         self:pop_font()
         if open then
             r.defer(loop)
