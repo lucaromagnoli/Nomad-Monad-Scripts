@@ -939,3 +939,42 @@ function PCMSource:get_section_info()
         return nil
     end
 end
+
+
+ImGui = ReaLoopBaseModel:new()
+
+function ImGui:new(label, font_name)
+    font_name = font_name or 'sans-serif'
+    local size = reaper.GetAppVersion():match('OSX') and 12 or 14
+    local font = reaper.ImGui_CreateFont(font_name, size)
+    local ctx = r.ImGui_CreateContext(label)
+    reaper.ImGui_AttachFont(ctx, font)
+    local o = {
+        ctx = ctx,
+        font = font,
+        label = label
+    }
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end
+
+function ImGui:loop(func)
+    function loop(...)
+        reaper.ImGui_PushFont(self.ctx, self.font)
+        reaper.ImGui_SetNextWindowSize(self.ctx, 400, 80, reaper.ImGui_Cond_FirstUseEver())
+        local visible, open = reaper.ImGui_Begin(self.ctx, self.label, true)
+        if visible then
+            func(self.ctx, ...)
+            reaper.ImGui_End(self.ctx)
+        end
+        reaper.ImGui_PopFont(self.ctx)
+
+        if open then
+            reaper.defer(loop)
+        else
+            reaper.ImGui_DestroyContext(self.ctx)
+        end
+    end
+    return loop
+end
