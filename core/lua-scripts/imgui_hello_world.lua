@@ -72,5 +72,5 @@ function frame(ctx)
   rv, text = reaper.ImGui_InputText(ctx, 'text input', text)
 end
 
-loop = gui:loop(frame)
+loop = gui:loop(frame, 'ImGuiHelloWorld')
 reaper.defer(loop)

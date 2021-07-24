@@ -953,9 +953,9 @@ function ImGui:new(label, font_name, width, height)
     font_name = font_name or 'sans-serif'
     width = width or 400
     height = height or 80
-    local size = r.GetAppVersion():match('OSX') and 12 or 14
-    local font = r.ImGui_CreateFont(font_name, size)
-    local ctx = r.ImGui_CreateContext(label)
+    local size = self:get_app_version():match('OSX') and 12 or 14
+    local font = self:create_font(font_name, size)
+    local ctx = self:create_context(label)
     local o = {
         ctx = ctx,
         font = font,
@@ -984,6 +984,10 @@ function ImGui:get_app_version()
     return r.GetAppVersion()
 end
 
+function ImGui:create_font(font_name, size)
+     return r.ImGui_CreateFont(font_name, size)
+end
+
 function ImGui:attach_font()
     r.ImGui_AttachFont(self.ctx, self.font)
 end
@@ -994,6 +998,10 @@ end
 
 function ImGui:pop_font()
     r.ImGui_PopFont(self.ctx)
+end
+
+function ImGui:create_context(label)
+    return r.ImGui_CreateContext(label)
 end
 
 --[[
@@ -1054,12 +1062,12 @@ function ImGui:destroy_context()
     r.ImGui_DestroyContext(self.ctx)
 end
 
-function ImGui:loop(func, label, p_open)
+function ImGui:loop(func)
     function loop()
         --self:attach_font()
         --self:push_font()
         --self:set_next_window_size()
-        local window = self:window_context(label, p_open)
+        local window = self:window_context()
         local open = window(func)
         --self:pop_font()
         if open then
