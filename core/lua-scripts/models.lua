@@ -48,9 +48,9 @@ function Reaper:print(...)
     local joined = ''
     for i, v in ipairs({ ... }) do
         if i == 1 then
-            joined = v
+            joined = tostring(v)
         else
-            joined = joined .. self.sep .. v
+            joined = joined .. self.sep .. tostring(v)
         end
     end
     self:console_msg(joined)
@@ -1061,9 +1061,6 @@ function ImGui:window_context()
     end
 end
 
-function ImGui:button(label, size_wIn, size_hIn)
-     return r.ImGui_Button(self.ctx,label, size_wIn, size_hIn)
-end
 
 function ImGui:text(text, mode, col_rgba)
     mode = mode or 0
@@ -1076,7 +1073,51 @@ function ImGui:text(text, mode, col_rgba)
     elseif mode == 3 then
         r.ImGui_TextWrapped(self.ctx, text)
     end
+end
 
+function ImGui:input_text(label, buf, flag)
+    retval, buf = r.ImGui_InputText(self.ctx, label, buf, flag)
+    self:log('retval', retval)
+    self:log('buf', buf)
+    if retval then
+        return buf
+    end
+end
+
+ImGui.InputTextFlag = {
+     ImGui_InputTextFlags_AllowTabInput,
+     ImGui_InputTextFlags_AlwaysOverwrite,
+     ImGui_InputTextFlags_AutoSelectAll,
+     ImGui_InputTextFlags_CharsDecimal,
+     ImGui_InputTextFlags_CharsHexadecimal,
+     ImGui_InputTextFlags_CharsNoBlank,
+     ImGui_InputTextFlags_CharsScientific,
+     ImGui_InputTextFlags_CharsUppercase,
+     ImGui_InputTextFlags_CtrlEnterForNewLine
+}
+
+
+
+function ImGui:same_line()
+    reaper.ImGui_SameLine(self.ctx)
+end
+
+-- Widgets
+
+function ImGui:button(label, size_wIn, size_hIn)
+     return r.ImGui_Button(self.ctx,label, size_wIn, size_hIn)
+end
+
+function ImGui:check_box(label, v)
+    retval, v = reaper.ImGui_Checkbox(self.ctx, label, v)
+    return retval, v
+end
+
+function ImGui:list_box(label, current_item, items, height_in_itemsIn)
+    retval, current_item, items = r.ImGui_ListBox(
+            self.ctx, label, current_item, items, height_in_itemsIn
+    )
+    return retval, current_item, items
 end
 
 function ImGui:loop(func)
