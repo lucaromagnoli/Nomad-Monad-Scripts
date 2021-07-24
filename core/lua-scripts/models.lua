@@ -1054,14 +1054,14 @@ function ImGui:destroy_context()
     r.ImGui_DestroyContext(self.ctx)
 end
 
-function ImGui:loop(func)
+function ImGui:loop(func, label, p_open)
     function loop()
-        self:attach_font()
-        self:push_font()
-        self:set_next_window_size()
-        local window = self:window_context()
+        --self:attach_font()
+        --self:push_font()
+        --self:set_next_window_size()
+        local window = self:window_context(label, p_open)
         local open = window(func)
-        self:pop_font()
+        --self:pop_font()
         if open then
             r.defer(loop)
         else
