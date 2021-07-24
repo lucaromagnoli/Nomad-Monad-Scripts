@@ -943,16 +943,19 @@ end
 
 ImGui = ReaLoopBaseModel:new()
 
-function ImGui:new(label, font_name)
+function ImGui:new(label, font_name, width, height)
     font_name = font_name or 'sans-serif'
+    width = width or 400
+    height = height or 80
     local size = reaper.GetAppVersion():match('OSX') and 12 or 14
     local font = reaper.ImGui_CreateFont(font_name, size)
     local ctx = r.ImGui_CreateContext(label)
-    reaper.ImGui_AttachFont(ctx, font)
     local o = {
         ctx = ctx,
         font = font,
-        label = label
+        label = label,
+        width = width,
+        height = height
     }
     setmetatable(o, self)
     self.__index = self
@@ -960,16 +963,16 @@ function ImGui:new(label, font_name)
 end
 
 function ImGui:loop(func)
-    function loop(...)
+    reaper.ImGui_AttachFont(self.ctx, self.font)
+    function loop()
         reaper.ImGui_PushFont(self.ctx, self.font)
-        reaper.ImGui_SetNextWindowSize(self.ctx, 400, 80, reaper.ImGui_Cond_FirstUseEver())
+        reaper.ImGui_SetNextWindowSize(self.ctx, self.width, self.height, reaper.ImGui_Cond_FirstUseEver())
         local visible, open = reaper.ImGui_Begin(self.ctx, self.label, true)
         if visible then
-            func(self.ctx, ...)
+            func(self.ctx)
             reaper.ImGui_End(self.ctx)
         end
         reaper.ImGui_PopFont(self.ctx)
-
         if open then
             reaper.defer(loop)
         else
