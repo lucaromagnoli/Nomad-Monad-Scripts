@@ -50,7 +50,7 @@ function Reaper:print(...)
         if i == 1 then
             joined = v
         else
-            joined = joined .. Sep .. v
+            joined = joined .. self.sep .. v
         end
     end
     self:console_msg(joined)
@@ -104,6 +104,11 @@ function Reaper:undo(description, func, ...)
     r.Undo_EndBlock(description, -1)
 end
 
+
+function Reaper:defer(func)
+    r.defer(func)
+end
+
 ReaLoopBaseModel = {}
 
 function ReaLoopBaseModel:new()
@@ -116,6 +121,7 @@ end
 function ReaLoopBaseModel:log(...)
     Reaper:log(...)
 end
+
 
 -- Project
 
@@ -941,14 +947,14 @@ function PCMSource:get_section_info()
 end
 
 
-ImGui = ReaLoopBaseModel:new()
+ImGui = {}
 
 function ImGui:new(label, font_name, width, height)
     font_name = font_name or 'sans-serif'
     width = width or 400
     height = height or 80
-    local size = reaper.GetAppVersion():match('OSX') and 12 or 14
-    local font = reaper.ImGui_CreateFont(font_name, size)
+    local size = r.GetAppVersion():match('OSX') and 12 or 14
+    local font = r.ImGui_CreateFont(font_name, size)
     local ctx = r.ImGui_CreateContext(label)
     local o = {
         ctx = ctx,
@@ -962,21 +968,96 @@ function ImGui:new(label, font_name, width, height)
     return o
 end
 
+function ImGui:log(...)
+    if DEBUG then
+        Reaper:log('ImGui', ...)
+    end
+end
+
+--[[
+    Returns app version which may include an OS/arch signifier, such as: "6.17"
+    windows 32-bit), "6.17/x64" (windows 64-bit), "6.17/OSX64" (macOS 64-bit Intel),
+    "6.17/OSX" (macOS 32-bit), "6.17/macOS-arm64", "6.17/linux-x86_64",
+    "6.17/linux-i686", "6.17/linux-aarch64", "6.17/linux-armv7l", etc
+--]]
+function ImGui:get_app_version()
+    return r.GetAppVersion()
+end
+
+function ImGui:attach_font()
+    r.ImGui_AttachFont(self.ctx, self.font)
+end
+
+function ImGui:push_font()
+    r.ImGui_PushFont(self.ctx, self.font)
+end
+
+function ImGui:pop_font()
+    r.ImGui_PopFont(self.ctx)
+end
+
+--[[
+    Set the variable if the object/window has no persistently saved data
+    (no entry in .ini file)
+--]]
+function ImGui:first_condition()
+    return r.ImGui_Cond_FirstUseEver()
+end
+
+function ImGui:set_next_window_size(width, height, cond)
+    width = width or self.width
+    height = height or self.height
+    cond = cond or self:first_condition()
+    r.ImGui_SetNextWindowSize(self.ctx, width, height, cond)
+end
+
+--[[
+    Push window to the stack and start appending to it. See ImGui:end_window.
+    Passing true to 'p_open' shows a window-closing widget in the upper-right corner of the window,
+    which clicking will set the boolean to false when returned.
+    You may append multiple times to the same window during the same frame
+    by calling Begin()/End() pairs multiple times.
+    Some information such as 'flags' or 'open' will only be considered
+    by the first call to Begin().
+    Begin() return false to indicate the window is collapsed or fully clipped,
+    so you may early out and omit submitting anything to the window.
+    Note that the bottom of window stack always contains a window called "Debug".
+
+    @label string : label for the window
+    @p_open boolean : shows a window-closing widget in the upper-right corner of the window
+    @return boolean : whether window is visible
+    @return boolean : whether window is open
+--]]
+function ImGui:begin_window(label, p_open)
+    label = label or self.label
+    p_open = p_open or true
+    return r.ImGui_Begin(self.ctx, self.label, p_open)
+end
+
+-- Pop window from the stack. See ImGui:begin_window
+function ImGui:end_window()
+    r.ImGui_End(self.ctx)
+end
+
+function ImGui:destroy_context()
+    r.ImGui_DestroyContext(self.ctx)
+end
+
 function ImGui:loop(func)
-    reaper.ImGui_AttachFont(self.ctx, self.font)
     function loop()
-        reaper.ImGui_PushFont(self.ctx, self.font)
-        reaper.ImGui_SetNextWindowSize(self.ctx, self.width, self.height, reaper.ImGui_Cond_FirstUseEver())
-        local visible, open = reaper.ImGui_Begin(self.ctx, self.label, true)
+        self:attach_font()
+        self:push_font()
+        self:set_next_window_size()
+        local visible, open = self:begin_window()
         if visible then
             func(self.ctx)
-            reaper.ImGui_End(self.ctx)
+            self:end_window()
         end
-        reaper.ImGui_PopFont(self.ctx)
+        self:pop_font()
         if open then
-            reaper.defer(loop)
+            r.defer(loop)
         else
-            reaper.ImGui_DestroyContext(self.ctx)
+            self:destroy_context()
         end
     end
     return loop
