@@ -962,7 +962,8 @@ function ImGui:new(label, font_name, width, height)
         font = font,
         label = label,
         width = width,
-        height = height
+        height = height,
+        end_ctx = false
     }
     setmetatable(o, self)
     self.__index = self
@@ -1062,6 +1063,10 @@ function ImGui:window_context()
     end
 end
 
+function ImGui:done()
+    self.end_ctx = true
+end
+
 
 function ImGui:text(text, mode, col_rgba)
     mode = mode or 0
@@ -1129,7 +1134,7 @@ function ImGui:loop(func)
         local window = self:window_context()
         local open = window(func)
         --self:pop_font()
-        if open then
+        if open and not self.end_ctx then
             r.defer(loop)
         else
             self:destroy_context()
