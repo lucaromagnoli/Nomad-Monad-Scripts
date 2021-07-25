@@ -29,6 +29,7 @@ end
     ret 1=OK,2=CANCEL,3=ABORT,4=RETRY,5=IGNORE,6=YES,7=NO
 ]]--
 function Reaper:msg_box(msg, title, type)
+    type = type or 0
     return r.ShowMessageBox(msg, title, type)
 end
 
