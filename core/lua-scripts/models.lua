@@ -99,10 +99,12 @@ end
 -- @description : string : a description of the action to undo
 -- @func : the function to call
 -- @... : variable number of arguments to func
-function Reaper:undo(description, func, ...)
-    r.Undo_BeginBlock()
-    func(...)
-    r.Undo_EndBlock(description, -1)
+function Reaper:undo(description)
+    return function(func, ...)
+        r.Undo_BeginBlock()
+        func(...)
+        r.Undo_EndBlock(description, -1)
+    end
 end
 
 
@@ -201,6 +203,7 @@ end
 -- @guid string
 function Project:track_from_guid(guid)
     local track = r.BR_GetMediaTrackByGUID(self.active, guid)
+    self:log('track ', track)
     return Track:new(track)
 end
 
@@ -1067,6 +1070,10 @@ function ImGui:done()
     self.end_ctx = true
 end
 
+function ImGui:is_done()
+    return self.end_ctx
+end
+
 
 function ImGui:text(text, mode, col_rgba)
     mode = mode or 0
@@ -1134,7 +1141,7 @@ function ImGui:loop(func)
         local window = self:window_context()
         local open = window(func)
         --self:pop_font()
-        if open and not self.end_ctx then
+        if open and not self:is_done() then
             r.defer(loop)
         else
             self:destroy_context()
