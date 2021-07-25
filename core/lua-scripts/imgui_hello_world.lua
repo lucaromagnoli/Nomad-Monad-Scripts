@@ -3,7 +3,7 @@ DEBUG = true
 local path = ({ reaper.get_action_context() })[2]:match('^.+[\\//]')
 package.path = path .. "?.lua"
 
-require('models')
+require('ReaWrap.models')
 
 local r = Reaper:new()
 local project = Project:new()
