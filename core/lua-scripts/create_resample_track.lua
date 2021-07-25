@@ -7,7 +7,7 @@ DEBUG = true
 local path = ({reaper.get_action_context()})[2]:match('^.+[\\//]')
 package.path = path .. "?.lua"
 
-require('models')
+require('ReaWrap.models')
 
 DefaultTag = 'RSMPL'
 LSep = '['
@@ -49,6 +49,11 @@ function ResampleTrack:from_source_track(project, source_track)
     local rsmpl = self:new(track.media_track, source_track)
     project:set_key_value(DefaultTag, source_track:GUID(), rsmpl:GUID(), true)
     return rsmpl
+end
+
+local function copy_fx_chain(source_track, rsmpl_track, index)
+    index = index or 1
+    instruments, audio_fx = get_inst_and_fx(track)
 end
 
 local function get_rsmpl_track(project, track)
@@ -100,9 +105,6 @@ local function check_rsmpl_track(project, source_track)
         end
     end
     return true
-end
-
-local function copy_fx_chain()
 end
 
 -- Create a table of RSMPLTrack from currently selected tracks.
