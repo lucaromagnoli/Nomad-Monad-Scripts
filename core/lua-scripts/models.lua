@@ -7,7 +7,16 @@ DEBUG = true
 
 Sep = ', '
 
-Reaper = {}
+Reaper = {
+    Types = {
+        ReaProject = 'ReaProject',
+        MediaTrack = 'MediaTrack',
+        MediaItem = 'MediaItem',
+        MediaItem_Take = 'MediaItem_Take',
+        TrackEnvelope = 'TrackEnvelope',
+        PCM_source = 'PCM_source'
+    }
+}
 
 function Reaper:new()
     local o = {}
@@ -38,6 +47,20 @@ end
 function Reaper:GUID()
     return r.genGuid('')
 end
+
+--[[
+    Return true if the pointer is a valid object of the right type in proj.
+    @pointer Userdata
+    @type_name string
+
+    Supported types are: ReaProject, MediaTrack, MediaItem, MediaItem_Take,
+    TrackEnvelope and PCM_source.
+--]]
+function Reaper:is_valid_pointer(pointer, type_name)
+     reaper.ValidatePtr(pointer, type_name)
+end
+
+
 
 --[[
     Print message(s) to Reaper console.
@@ -107,32 +130,47 @@ function Reaper:undo(description)
     end
 end
 
+function Reaper:prevent_refresh()
+    return function(func, ...)
+        r.PreventUIRefresh(1)
+        func(...)
+        r.PreventUIRefresh(-1)
+    end
+end
+
+function Reaper:enum_projects()
+    return reaper.EnumProjects(-1)
+end
 
 function Reaper:defer(func)
     r.defer(func)
 end
 
-ReaLoopBaseModel = {}
+ReaWrapBaseModel = {}
 
-function ReaLoopBaseModel:new()
+function ReaWrapBaseModel:new()
     local o = {}
     setmetatable(o, self)
     self.__index = self
     return o
 end
 
-function ReaLoopBaseModel:log(...)
+function ReaWrapBaseModel:log(...)
     Reaper:log(...)
 end
 
 
 -- Project
 
-Project = ReaLoopBaseModel:new()
+Project = ReaWrapBaseModel:new()
 
 -- Create new Project instance.
 function Project:new(o)
-    o = o or { active = 0 }
+    local rea_project, _ = Reaper:enum_projects()
+    o = o or {
+        active = 0,
+        rea_project = rea_project
+    }
     setmetatable(o, self)
     self.__index = self
     return o
@@ -146,6 +184,10 @@ end
 -- @return string
 function Project:get_name()
     return r.GetProjectName(self.active, '')
+end
+
+function Project:is_valid()
+    return Reaper:is_valid_pointer(self.rea_project, Reaper.Types.ReaProject)
 end
 
 -- Get track by track count index.
@@ -266,7 +308,7 @@ function Project:has_key_value(section, key)
 end
 
 -- Track
-Track = ReaLoopBaseModel:new()
+Track = ReaWrapBaseModel:new()
 
 -- Create new instance of Track
 -- @media_track userdata : Pointer to Reaper MediaTrack
@@ -284,6 +326,10 @@ function Track:__tostring()
             '<Track name=%s>',
             self:get_name()
     )
+end
+
+function Track:is_valid()
+    return Reaper:is_valid_pointer(self.media_track, Reaper.Types.MediaTrack)
 end
 
 
@@ -611,7 +657,7 @@ function Track:add_media_item()
 end
 
 -- TrackFX
-TrackFX = ReaLoopBaseModel:new()
+TrackFX = ReaWrapBaseModel:new()
 
 function TrackFX:new(track, idx)
     local o = {
@@ -633,6 +679,7 @@ function TrackFX:__tostring()
             self:is_offline()
     )
 end
+
 
 -- Delete FX
 function TrackFX:delete()
@@ -729,7 +776,7 @@ end
 
 -- MediaItem
 
-MediaItem = ReaLoopBaseModel:new()
+MediaItem = ReaWrapBaseModel:new()
 
 function MediaItem:new(media_item)
     -- MediaItem constructor
@@ -849,7 +896,7 @@ end
 
 -- MediaItemTake
 
-MediaItemTake = ReaLoopBaseModel:new()
+MediaItemTake = ReaWrapBaseModel:new()
 
 -- @media_item: userdata
 -- @take: userdata
@@ -890,7 +937,7 @@ end
 
 -- PCMSource
 
-PCMSource = ReaLoopBaseModel:new()
+PCMSource = ReaWrapBaseModel:new()
 
 function PCMSource:new(take --[[userdata]], source --[[userdata]])
     local o = {
