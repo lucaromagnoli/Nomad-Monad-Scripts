@@ -7,16 +7,16 @@ DEBUG = true
 
 Sep = ', '
 
-Reaper = {
-    Types = {
-        ReaProject = 'ReaProject',
-        MediaTrack = 'MediaTrack',
-        MediaItem = 'MediaItem',
-        MediaItem_Take = 'MediaItem_Take',
-        TrackEnvelope = 'TrackEnvelope',
-        PCM_source = 'PCM_source'
-    }
+PointerTypes = {
+    ReaProject = 'ReaProject*',
+    MediaTrack = 'MediaTrack*',
+    MediaItem = 'MediaItem*',
+    MediaItem_Take = 'MediaItem_Take*',
+    TrackEnvelope = 'TrackEnvelope*',
+    PCM_source = 'PCM_source*'
 }
+
+Reaper = {}
 
 function Reaper:new()
     local o = {}
@@ -57,7 +57,7 @@ end
     TrackEnvelope and PCM_source.
 --]]
 function Reaper:is_valid_pointer(pointer, type_name)
-     reaper.ValidatePtr(pointer, type_name)
+    return reaper.ValidatePtr(pointer, type_name)
 end
 
 
@@ -169,7 +169,8 @@ function Project:new(o)
     local rea_project, _ = Reaper:enum_projects()
     o = o or {
         active = 0,
-        rea_project = rea_project
+        rea_project = rea_project,
+        pointer_type = PointerTypes.ReaProject
     }
     setmetatable(o, self)
     self.__index = self
@@ -209,24 +210,24 @@ end
         accepted value: {idx = number}. Default {idx = 0}
 --]]
 -- @return Track
-function Project:get_selected_track(obj)
-    obj = obj or { idx = 0 }
-    local media_track = r.GetSelectedTrack(self.active, obj.idx)
+function Project:get_selected_track(idx)
+    idx = idx or 0
+    local media_track = r.GetSelectedTrack(self.active, idx)
     return Track:new(media_track)
 end
 
--- Get all selected media tracks.
+-- Get all selected tracks.
 --[[
     @obj Table
         accepted value:{master = true} (include master track, default false).
 --]]
 -- @return Table<MediaTrack>
-function Project:get_selected_tracks(obj)
-    obj = obj or { master = false }
+function Project:get_selected_tracks(master)
+    master = master or false
     local tracks = {}
-    local count = self:count_selected_tracks(obj.master)
+    local count = self:count_selected_tracks(master)
     for i = 0, count - 1 do
-        local track = self:get_selected_track({ idx = i })
+        local track = self:get_selected_track(i)
         tracks[i + 1] = track
     end
     return tracks
@@ -288,7 +289,7 @@ end
 -- @value string
 -- @persist boolean
 function Project:set_key_value(section, key, value, persist)
-    return r.SetExtState(section, key, value, persist)
+    r.SetExtState(section, key, value, persist)
 end
 
 --Delete value by section and key into project state.
@@ -296,7 +297,7 @@ end
 --@key string
 --@persist boolean
 function Project:del_key_value(section, key, persist)
-    return r.DeleteExtState(section, key, persist)
+    r.DeleteExtState(section, key, persist)
 end
 
 --Whether section and key value is stored in project state.
@@ -314,7 +315,10 @@ Track = ReaWrapBaseModel:new()
 -- @media_track userdata : Pointer to Reaper MediaTrack
 -- @return Track
 function Track:new(media_track --[[userdata]])
-    local o = { media_track = media_track }
+    local o = {
+        media_track = media_track,
+        pointer_type = PointerTypes.MediaTrack
+    }
     setmetatable(o, self)
     self.__index = self
     return o
@@ -329,7 +333,7 @@ function Track:__tostring()
 end
 
 function Track:is_valid()
-    return Reaper:is_valid_pointer(self.media_track, Reaper.Types.MediaTrack)
+    return Reaper:is_valid_pointer(self.media_track, PointerTypes.MediaTrack)
 end
 
 
