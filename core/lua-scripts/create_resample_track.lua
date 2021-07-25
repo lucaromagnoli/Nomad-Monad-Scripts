@@ -2,12 +2,11 @@
 -- @author NomadMonad
 -- @version 0.1a
 
-DEBUG = true
-
 local path = ({reaper.get_action_context()})[2]:match('^.+[\\//]')
-package.path = path .. "?.lua"
-
-require('ReaWrap.models')
+package.path = package.path .. ';' .. path .. '?.lua'
+package.path = package.path .. ';' .. path .. 'ReaWrap/models/?.lua'
+require('ReaWrap.models.reaper')
+require('ReaWrap.models.project')
 
 DefaultTag = 'RSMPL'
 LSep = '['
@@ -111,7 +110,6 @@ end
 --@return Table<RSMPLTrack>
 local function get_rsmpl_tracks(project)
     local resample_tracks = {}
-    local resp = 1
     for i, source_track in ipairs(project:get_selected_tracks()) do
         if check_rsmpl_track(project, source_track) then
             local resample_track = ResampleTrack:from_source_track(project, source_track)
