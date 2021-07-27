@@ -5,8 +5,7 @@
 local path = ({reaper.get_action_context()})[2]:match('^.+[\\//]')
 package.path = package.path .. ';' .. path .. '?.lua'
 package.path = package.path .. ';' .. path .. 'ReaWrap/models/?.lua'
-require('ReaWrap.models.reaper')
-require('ReaWrap.models.project')
+require('ReaWrap.models')
 
 DefaultTag = 'RSMPL'
 LSep = '['
@@ -30,6 +29,7 @@ function ResampleTrack:new(media_track --[[userdata]], source_track --[[Track]])
     return o
   end
 
+
 function ResampleTrack:__tostring()
     return string.format(
         '<ResampleTrack Name=%s, SourceTrack=%s>',
@@ -37,6 +37,7 @@ function ResampleTrack:__tostring()
         self.source_track:get_name()
     )
 end
+
 
 function ResampleTrack:from_source_track(project, source_track)
     local color = source_track:get_color()
@@ -50,31 +51,53 @@ function ResampleTrack:from_source_track(project, source_track)
     return rsmpl
 end
 
+local function get_inst_and_fx(track)
+    local instruments = {}
+    local audio_fx = {}
+    for fx in track:iter_fx_chain() do
+        if fx:is_instrument() then
+            instruments[#instruments + 1] = fx
+        else
+            audio_fx[#audio_fx + 1] = fx
+        end
+    end
+    return instruments, audio_fx
+end
+
 local function copy_fx_chain(source_track, rsmpl_track, index)
     index = index or 1
-    instruments, audio_fx = get_inst_and_fx(track)
+    local instruments, audio_fx = get_inst_and_fx(source_track)
+    audio_fx = slice_table(audio_fx, index)
+    for i, fx in ipairs(audio_fx) do
+        fx:copy_to_track(rsmpl_track, i)
+    end
 end
+
 
 local function get_rsmpl_track(project, track)
     local rsmpl_guid = project:get_key_value(DefaultTag, track:GUID())
     return project:track_from_guid(rsmpl_guid)
 end
 
+
 local function has_rsmpl_track(project, track)
     return project:has_key_value(DefaultTag, track:GUID())
 end
 
+
 local function del_rsmpl_track(project, track)
+    r:log('del_rsmpl_track')
     project:del_key_value(DefaultTag, track:GUID(), true)
-    return true
 end
+
 
 local function unlink_from_rsmpl_track(project, track, rsmpl_track)
     local rsmpl_name = rsmpl_track:get_name()
     local new_name = string.gsub(rsmpl_name, ResampleTrackPrefixEscaped, '')
     rsmpl_track:set_name(new_name)
-    return del_rsmpl_track(project, track)
+    del_rsmpl_track(project, track)
 end
+
 
 local function rsmpl_track_dialogue(rsmpl_track)
     local title = string.format(
@@ -84,7 +107,7 @@ local function rsmpl_track_dialogue(rsmpl_track)
     local msg = [[
         'Would you you like to unlink it and link it to a new one?'
     ]]
-    return r:msg_box(msg, title, 1)
+    return r:msg_box(msg, title, MsgBoxTypes.OKCANCEL)
 end
 
 -- @return boolean
@@ -93,13 +116,15 @@ local function check_rsmpl_track(project, source_track)
             -- create resample track instance to get track name
         local rsmpl_track = get_rsmpl_track(project, source_track)
         if not rsmpl_track:is_valid() then
-            return del_rsmpl_track(project, source_track)
+            del_rsmpl_track(project, source_track)
+            return true
         else
             local confirm = rsmpl_track_dialogue(rsmpl_track)
-            if  confirm then
-                return unlink_from_rsmpl_track(project, source_track, rsmpl_track)
+            if confirm == MsgBoxReturnTypes.OK then
+                unlink_from_rsmpl_track(project, source_track, rsmpl_track)
+                return true
             else
-                return confirm
+                return false
             end
         end
     end
@@ -110,10 +135,11 @@ end
 --@return Table<RSMPLTrack>
 local function get_rsmpl_tracks(project)
     local resample_tracks = {}
-    for i, source_track in ipairs(project:get_selected_tracks()) do
+    for source_track in project:iter_selected_tracks() do
         if check_rsmpl_track(project, source_track) then
             local resample_track = ResampleTrack:from_source_track(project, source_track)
-            resample_tracks[i] = resample_track
+            copy_fx_chain(source_track, resample_track)
+            resample_tracks[#resample_tracks + 1] = resample_track
         end
     end
     return resample_tracks
@@ -121,6 +147,10 @@ end
 
 
 local function main(opts)
+    if not p:has_selected_tracks()
+        then r:msg_box('Please select a track', 'No track selected')
+        return
+    end
     for _, rsmpl in ipairs(get_rsmpl_tracks(p)) do
         r:print(rsmpl)
     end
