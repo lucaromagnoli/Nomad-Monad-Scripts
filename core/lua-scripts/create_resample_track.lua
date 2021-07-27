@@ -43,7 +43,7 @@ function ResampleTrack:from_source_track(project, source_track)
     local color = source_track:get_color()
     local index = source_track:get_index()
     local name = ResampleTrackPrefix .. source_track:get_name()
-    local track = project:add_track(index, true)
+    local track = project:add_track(index, false)
     track:set_name(name)
     track:set_color(color)
     local rsmpl = self:new(track.media_track, source_track)
@@ -64,12 +64,13 @@ local function get_inst_and_fx(track)
     return instruments, audio_fx
 end
 
-local function copy_fx_chain(source_track, rsmpl_track, index)
+local function move_fx_chain(source_track, rsmpl_track, index)
     index = index or 1
-    local instruments, audio_fx = get_inst_and_fx(source_track)
-    audio_fx = slice_table(audio_fx, index)
-    for i, fx in ipairs(audio_fx) do
-        fx:copy_to_track(rsmpl_track, i)
+    local fx_count = source_track:get_fx_count()
+    while  fx_count > index do
+        local fx = TrackFX:new(source_track, fx_count - 1)
+        fx_count = fx_count - 1
+        fx:move_to_track(rsmpl_track, 0)
     end
 end
 
@@ -86,7 +87,6 @@ end
 
 
 local function del_rsmpl_track(project, track)
-    r:log('del_rsmpl_track')
     project:del_key_value(DefaultTag, track:GUID(), true)
 end
 
@@ -133,12 +133,12 @@ end
 
 -- Create a table of RSMPLTrack from currently selected tracks.
 --@return Table<RSMPLTrack>
-local function get_rsmpl_tracks(project)
+local function create_rsmpl_tracks(project, index)
     local resample_tracks = {}
     for source_track in project:iter_selected_tracks() do
         if check_rsmpl_track(project, source_track) then
             local resample_track = ResampleTrack:from_source_track(project, source_track)
-            copy_fx_chain(source_track, resample_track)
+            move_fx_chain(source_track, resample_track, index)
             resample_tracks[#resample_tracks + 1] = resample_track
         end
     end
@@ -151,7 +151,7 @@ local function main(opts)
         then r:msg_box('Please select a track', 'No track selected')
         return
     end
-    for _, rsmpl in ipairs(get_rsmpl_tracks(p)) do
+    for _, rsmpl in ipairs(create_rsmpl_tracks(p)) do
         r:print(rsmpl)
     end
 end
