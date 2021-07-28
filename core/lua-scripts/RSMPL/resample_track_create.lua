@@ -2,9 +2,9 @@
 -- @author NomadMonad
 -- @version 0.1a
 
-local path = ({reaper.get_action_context()})[2]:match('^.+[\\//]')
-package.path = package.path .. ';' .. path .. '?.lua'
-package.path = package.path .. ';' .. path .. 'ReaWrap/models/?.lua'
+local parent = ({reaper.get_action_context()})[2]:match('(.+/)RSMPL')
+package.path = package.path .. ';' .. parent .. '?.lua'
+package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
 require('ReaWrap.models')
 
 DefaultTag = 'RSMPL'
