@@ -9,7 +9,7 @@ require('ReaWrap.models')
 
 DefaultTag = 'RSMPL'
 LSep = '['
-RSep = ']'
+RSep = '] '
 ResampleTrackPrefix = LSep .. DefaultTag .. RSep
 ResampleTrackPrefixEscaped = '%'.. LSep .. DefaultTag .. '%' .. RSep
 SourceTrackState = 'SourceTrackState'
@@ -86,6 +86,7 @@ function ResampleTrack:from_source_track(project, source_track)
     send:set_info_value(SendReceiveInfoValue.I_MIDIFLAGS, 0)
     send:set_info_value(SendReceiveInfoValue.I_SENDMODE, 3) -- pre fader
     source_track:set_info_value(TrackInfoValue.B_MAINSEND, 0)
+    rsmpl_track:set_info_value(TrackInfoValue.I_RECMODE, 3) -- stereo w latency compensation
     set_rsmpl_track(project, source_track, rsmpl_track)
     return rsmpl_track
 end
@@ -172,9 +173,7 @@ local function main(opts)
         then r:msg_box('Please select a track', 'No track selected')
         return
     end
-    for _, rsmpl in ipairs(create_rsmpl_tracks(p, fx_index)) do
-        r:print(rsmpl)
-    end
+    create_rsmpl_tracks(p, fx_index)
 end
 
 local no_refresh = r:prevent_refresh()
