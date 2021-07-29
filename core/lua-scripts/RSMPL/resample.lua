@@ -6,32 +6,32 @@ require('ReaWrap.models')
 
 DefaultTag = 'RSMPL'
 LSep = '['
-RSep = '] '
+RSep = ']'
 ResampleTrackPrefix = LSep .. DefaultTag .. RSep
-ResampleTrackPrefixEscaped = '%' .. LSep .. DefaultTag .. '%' .. RSep
+ResampleTrackPrefixEscaped = '%' .. LSep .. DefaultTag .. '%' .. RSep .. ' '
 SourceTrackState = 'SourceTrackState'
 
 
 -- Get the resample_track mapped to source_track from project key-value store.
-local function get_from_key_value(project, source_track)
+local function get_rsmpl_from_key_value(project, source_track)
     local rsmpl_guid = project:get_key_value(DefaultTag, source_track:GUID())
     return project:track_from_guid(rsmpl_guid)
 end
 
 -- Create a mapping from source track to resample_track in project key-value store.
-local function set_to_key_value(project, source_track, resample_track)
+local function set_rsmpl_to_key_value(project, source_track, resample_track)
     project:set_key_value(
             DefaultTag, source_track:GUID(), resample_track:GUID(), true
     )
 end
 
 -- Whether source_track has a RSMPL track mapped to it in project key-value store.
-local function is_in_key_value(project, source_track)
+local function is_rsmpl_in_key_value(project, source_track)
     return project:has_key_value(DefaultTag, source_track:GUID())
 end
 
 -- Delete mapping from source track to resample_track in project key-value store.
-local function del_from_key_value(project, source_track)
+local function del_rsmpl_from_key_value(project, source_track)
     project:del_key_value(DefaultTag, source_track:GUID(), true)
 end
 
@@ -97,7 +97,7 @@ local function unlink_from_rsmpl_track(project, track, rsmpl_track)
     local rsmpl_name = rsmpl_track:get_name()
     local new_name = string.gsub(rsmpl_name, ResampleTrackPrefixEscaped, '')
     rsmpl_track:set_name(new_name)
-    del_from_key_value(project, track)
+    del_rsmpl_from_key_value(project, track)
 end
 
 local function rsmpl_track_dialogue(rsmpl_track)
@@ -113,11 +113,11 @@ end
 
 -- @return boolean
 local function check_rsmpl_track(project, source_track)
-    if is_in_key_value(project, source_track) then
+    if is_rsmpl_in_key_value(project, source_track) then
         -- create resample track instance to get track name
-        local rsmpl_track = get_from_key_value(project, source_track)
+        local rsmpl_track = get_rsmpl_from_key_value(project, source_track)
         if not rsmpl_track:is_valid() then
-            del_from_key_value(project, source_track)
+            del_rsmpl_from_key_value(project, source_track)
             return true
         else
             local confirm = rsmpl_track_dialogue(rsmpl_track)
@@ -141,11 +141,16 @@ function create_resample_tracks(project, fx_index)
             set_source_track_state(project, source_track)
             local resample_track = ResampleTrack:new_from_source_track(project, source_track)
             move_fx_chain(source_track, resample_track, fx_index)
-            set_to_key_value(project, source_track, resample_track)
+            set_rsmpl_to_key_value(project, source_track, resample_track)
             resample_tracks[#resample_tracks + 1] = resample_track
         end
     end
     return resample_tracks
+end
+
+
+local function check_media_item(media_item)
+
 end
 
 -- Render instrument on source_track and move it to resample_track.
@@ -153,12 +158,40 @@ end
 -- @project ReaWrap.Project
 -- @return Table<RSMPLTrack>
 function render_to_resample_track(reawrap, project)
-    for item in project:iter_selected_items() do
-        local source_track = item:get_track()
-        if is_in_key_value(project, source_track) then
-            local rsmpl_track = get_from_key_value(project, source_track)
+    for media_item in project:iter_selected_media_items() do
+        local takes = media_item:get_takes()
+        local midi_take = takes[1]
+        local source_type =  midi_take:get_pcm_source():get_type()
+        if not #takes == 1 and source_type == 'MIDI'then
+            reawrap:msg_box('Selected media item is not a single MIDI take', 'RSMPL Error')
+            return
+        end
+        local midi_take_name = midi_take:get_name()
+        local source_track = Track:from_media_item(media_item)
+        if is_rsmpl_in_key_value(project, source_track) then
+            local rsmpl_track = get_rsmpl_from_key_value(project, source_track)
+            -- new empty item
+            local rsmpl_item = rsmpl_track:add_media_item()
+            rsmpl_item:set_length(media_item:get_length(false))
+            rsmpl_item:set_position(media_item:get_position(false))
+            -- save media_item state
+            previous_state = media_item:get_state_chunk()
+
+            -- render to new take
             reawrap:apply_fx()
-            item:move_to_track(rsmpl_track)
+            takes = media_item:get_takes()
+            local last_take = takes[#takes]
+            local pcm_source = last_take:get_pcm_source()
+            if pcm_source:get_type() ~= 'WAVE' then
+                reawrap:msg_box('No media item take', 'RSMPL Error')
+            end
+            -- copy take to rsmpl
+            local rsmpl_take = rsmpl_item:add_take()
+            rsmpl_take:set_pcm_source(pcm_source)
+            local rsmpl_take_name = ResampleTrackPrefix .. ' ' .. midi_take_name
+            rsmpl_take:set_name(rsmpl_take_name)
+            -- reload media item state
+            media_item:set_state_chunk(previous_state)
         end
     end
 end
