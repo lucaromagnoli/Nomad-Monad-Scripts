@@ -11,11 +11,13 @@ ResampleTrackPrefix = LSep .. DefaultTag .. RSep
 ResampleTrackPrefixEscaped = '%' .. LSep .. DefaultTag .. '%' .. RSep .. ' '
 SourceTrackState = 'SourceTrackState'
 
+local r = Reaper:new()
 
 -- Get the resample_track mapped to source_track from project key-value store.
 local function get_rsmpl_from_key_value(project, source_track)
     local rsmpl_guid = project:get_key_value(DefaultTag, source_track:GUID())
-    return project:track_from_guid(rsmpl_guid)
+    local pointer = project:track_from_guid(rsmpl_guid).media_track
+    return ResampleTrack:new(pointer, source_track)
 end
 
 -- Create a mapping from source track to resample_track in project key-value store.
@@ -82,6 +84,16 @@ function ResampleTrack:new_from_source_track(project, source_track)
     rsmpl_track:set_info_value(TrackInfoValue.I_RECMODE, 3) -- stereo input w latency compensation
     return rsmpl_track
 end
+
+-- @get send from source to resample_track
+function get_resample_track_send(resample_track)
+    for send in resample_track.source_track:iter_sends() do
+        if send:get_name() == resample_track:get_name() then
+            return send
+        end
+    end
+end
+
 
 local function move_fx_chain(source_track, rsmpl_track, fx_index)
     fx_index = fx_index or 1
@@ -172,11 +184,16 @@ function render_to_resample_track(reawrap, project)
             local rsmpl_track = get_rsmpl_from_key_value(project, source_track)
             -- new empty item
             local rsmpl_item = rsmpl_track:add_media_item()
-            rsmpl_item:set_length(media_item:get_length(false))
-            rsmpl_item:set_position(media_item:get_position(false))
+            item_position = media_item:get_position(false)
+            item_length = media_item:get_length(false)
+            rsmpl_item:set_position(item_position)
+            rsmpl_item:set_length(item_length)
             -- save media_item state
             previous_state = media_item:get_state_chunk()
-
+            media_item:set_info_string(
+                    MediaItemInfoString.P_EXT..':state',
+                    previous_state
+            )
             -- render to new take
             reawrap:apply_fx()
             takes = media_item:get_takes()
@@ -190,8 +207,12 @@ function render_to_resample_track(reawrap, project)
             rsmpl_take:set_pcm_source(pcm_source)
             local rsmpl_take_name = ResampleTrackPrefix .. ' ' .. midi_take_name
             rsmpl_take:set_name(rsmpl_take_name)
-            -- reload media item state
+            -- reload media item state and set send volume to 0
             media_item:set_state_chunk(previous_state)
+            src_to_rsmpl_snd = get_resample_track_send(rsmpl_track)
+            send_env = src_to_rsmpl_snd:get_envelope(EnvelopeType.volume)
+            send_env:add_points_around_edges(item_position, item_position + item_length)
+            --volume_ai = send_env:add_ai(0, item_position, item_length)
         end
     end
 end

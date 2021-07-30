@@ -13,7 +13,7 @@ local r = Reaper:new()
 local p = Project:new()
 
 local function main(opts)
-    if not p:has_selected_items()
+    if not p:has_selected_media_items()
     then
         r:msg_box('Please select an item', 'No item selected')
         return
