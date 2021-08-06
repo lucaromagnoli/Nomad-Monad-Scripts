@@ -1,5 +1,3 @@
-print(os.getenv('_DEBUG'))
-
 local info = debug.getinfo(3, "Sl")
 if info.short_src ==  'test_FXTree.lua' then
     local l_path = package.path:gmatch("(.-)?.lua;")()
@@ -11,8 +9,8 @@ else
     package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
 end
 
-
-require('ReaWrap.models')
+require('ReaWrap.models.project')
+require('ReaWrap.models.reaper')
 require('tree')
 
 local r = Reaper:new()
