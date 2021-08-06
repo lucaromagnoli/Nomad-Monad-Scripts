@@ -3,7 +3,7 @@
 -- @version 0.1a
 
 local act_ctx = ({ reaper.get_action_context() })[2]
-local parent = act_ctx:match('(.+)RSMPL')
+local parent = act_ctx:match('(.+)RSMPL/')
 package.path = package.path .. ';' .. parent .. '?.lua'
 package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
 require('ReaWrap.models')
@@ -18,7 +18,9 @@ local function main(opts)
         r:msg_box('Please select a track', 'No track selected')
         return
     end
-    create_resample_tracks(p, fx_index)
+    for track in p:iter_selected_tracks() do
+        create_resample_track(p, track)
+    end
 end
 
 local no_refresh = r:prevent_refresh()
