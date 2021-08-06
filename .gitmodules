@@ -4,3 +4,6 @@
 [submodule "core/lua-scripts/ReaWrap"]
 	path = core/lua-scripts/ReaWrap
 	url = git@github.com:lucaromagnoli/ReaWrap.git
+[submodule "core/lua-scripts/luaunit"]
+	path = core/lua-scripts/luaunit
+	url = git@github.com:bluebird75/luaunit.git
