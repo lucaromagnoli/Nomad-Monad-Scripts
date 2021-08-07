@@ -34,10 +34,11 @@ function FXRoot:new()
     return o
 end
 
-
 FXNode = Node:new()
 function FXNode:new()
     local o = self.get_object()
+    o.splitter = nil
+    o.mixer = nil
     self.__index = self
     setmetatable(o, self)
     return o
