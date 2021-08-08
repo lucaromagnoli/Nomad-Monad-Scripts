@@ -98,9 +98,11 @@ function traverse_fx_tree(children)
         gui:table_set_column_index(0)
         gui:align_text_to_frame_padding()
         if child:has_children() then
-            if gui:tree_node_ex('Child', ('%s'):format(child)) then
+            local open = gui:tree_node_ex('Child', ('%s'):format(child))
+            if open then
                 gui:table_set_column_index(1)
                 gui:text(tostring(child:has_children()))
+                traverse_fx_tree(child.children)
                 gui:pop_tree()
             end
         else
