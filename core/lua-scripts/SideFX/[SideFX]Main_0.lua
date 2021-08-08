@@ -24,25 +24,6 @@ end
 
 reawrap:defer(loop)
 
-function create_tree()
-    local root = Root:new()
-    for i=0, 2 do
-        node = Node:new()
-        root:add_child(node)
-        for j=0, 5 do
-            leaf = Leaf:new()
-            node:add_child(leaf)
-        end
-    end
-    for i=0, 2 do
-        leaf = Leaf:new()
-        root:add_child(leaf)
-    end
-    return root
-end
-
-local fxtree = create_tree()
-
 placeholder_members = { 0.0, 0.0, 1.0, 3.1416, 100.0, 999.0, 0.0, 0.0 }
 
 function ShowPlaceholderObject(prefix, uid)
@@ -77,58 +58,31 @@ function ShowPlaceholderObject(prefix, uid)
                 gui:table_set_column_index(1)
                 gui:set_next_item_width(-FLT_MIN)
                 if i >= 5 then
-                    rv, placeholder_members[i] = gui:input_double('##value', placeholder_members[i], 1.0)
+                    retval, placeholder_members[i] = gui:input_double('##value', placeholder_members[i], 1.0)
                 else
-                    rv, placeholder_members[i] = gui:drag_double('##value', placeholder_members[i], 0.01)
+                    retval, placeholder_members[i] = gui:drag_double('##value', placeholder_members[i], 0.01)
                 end
             end
             gui:pop_id()
         end
-        gui:tree_pop()
+        gui:pop_tree()
     end
     gui:pop_id()
 end
 
-function traverse_fx_tree(children)
-    local rv
-    for i, child in ipairs(children) do
-        -- Use object uid as identifier. Most commonly you could also use the object pointer as a base ID.
-        gui:push_id(child.id)
-        gui:table_next_row()
-        gui:table_set_column_index(0)
-        gui:align_text_to_frame_padding()
-        if child:has_children() then
-            local open = gui:tree_node_ex('Child', ('%s'):format(child))
-            if open then
-                gui:table_set_column_index(1)
-                gui:text(tostring(child:has_children()))
-                traverse_fx_tree(child.children)
-                gui:pop_tree()
-            end
-        else
-            local flags = gui:tree_node_flags_leaf() |
-                        gui:tree_node_flags_no_tree_push_on_open() |
-                        gui:tree_node_flags_bullet()
-            if gui:tree_node_ex('Child', ('%s'):format(child), gui:tree_node_flags_leaf()) then
-                gui:table_set_column_index(1)
-                gui:text(tostring(child:has_children()))
-                gui:pop_tree()
-            end
-        end
-        gui:pop_id()
-    end
-end
-
 function PropertyEditor()
     gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
-    local rv, open = gui:begin_window('Side FX Editor')
+    local rv, open = gui:begin_window('Example: Property editor')
     if not rv then
         return open
     end
     gui:push_style_var(gui:style_var_frame_padding(), 2, 2)
     if gui:begin_table('split', 2, gui:table_flags_borders_outer() | gui:table_flags_resizable()) then
         -- Iterate placeholder objects (all the same data)
-        traverse_fx_tree(fxtree.children)
+        for obj_i = 0, 4 - 1 do
+            ShowPlaceholderObject('Object', obj_i)
+            -- r.ImGui_Separator(ctx)
+        end
         gui:end_table()
     end
     gui:pop_style_var()

@@ -1,3 +1,5 @@
+require('ReaWrap.models.helpers')
+
 local function uuid4()
     local template ='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
     return string.gsub(template, '[xy]', function (c)
@@ -17,7 +19,7 @@ end
 function Leaf.get_object()
     return {
         id = uuid4(),
-        parent = nil,
+        parent = nil
     }
 end
 
@@ -27,6 +29,18 @@ end
 
 function Leaf:has_children()
     return false
+end
+
+function Leaf:is_root()
+    return false
+end
+
+function Leaf:is_node()
+    return false
+end
+
+function Leaf:is_leaf()
+    return true
 end
 
 NodeBase = {}
@@ -57,9 +71,9 @@ function NodeBase:add_children(children)
     end
 end
 
-function NodeBase:get_child_idx(child, children)
-    for i, child_ in ipairs(children) do
-        if child_ == child then
+function NodeBase:get_child_idx(child)
+    for i, c in ipairs(self.children) do
+        if c == child then
             return i
         end
     end
@@ -114,13 +128,25 @@ function Root:get_object()
     return {
         id = uuid4(),
         children = {},
-        __reverse_index = {}
     }
 end
 
 function Root:__tostring()
     return string.format('Root %s', self.id)
 end
+
+function Root:is_root()
+    return true
+end
+
+function Root:is_leaf()
+    return false
+end
+
+function Root:is_node()
+    return false
+end
+
 
 Node = NodeBase:new()
 function Node:new()
@@ -135,12 +161,34 @@ function Node:get_object()
         id = uuid4(),
         parent = nil,
         children = {},
-        __reverse_index = {}
     }
 end
 
 function Node:__tostring()
     return string.format('Node %s', self.id)
+end
+
+function Node:is_root()
+    return false
+end
+
+function Node:is_leaf()
+    return false
+end
+
+function Node:is_node()
+    return true
+end
+
+---@param child table <Leaf | Node>
+function Node:new_from_child(child)
+    local node = self:new()
+    local parent = child.parent
+    local child_idx = parent:get_child_idx(child)
+    parent:add_child(node, child_idx)
+    parent:remove_child(child)
+
+    return node
 end
 
 ---@param children table <Leaf | Node>
