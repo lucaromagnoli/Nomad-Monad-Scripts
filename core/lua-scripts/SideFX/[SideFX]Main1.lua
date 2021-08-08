@@ -97,10 +97,21 @@ function traverse_fx_tree(children)
         gui:table_next_row()
         gui:table_set_column_index(0)
         gui:align_text_to_frame_padding()
-        if gui:tree_node_ex('Child', ('%s'):format(child)) then
-            gui:table_set_column_index(1)
-            gui:text('hello node')
-            gui:pop_tree()
+        if child:has_children() then
+            if gui:tree_node_ex('Child', ('%s'):format(child)) then
+                gui:table_set_column_index(1)
+                gui:text(tostring(child:has_children()))
+                gui:pop_tree()
+            end
+        else
+            local flags = gui:tree_node_flags_leaf() |
+                        gui:tree_node_flags_no_tree_push_on_open() |
+                        gui:tree_node_flags_bullet()
+            if gui:tree_node_ex('Child', ('%s'):format(child), gui:tree_node_flags_leaf()) then
+                gui:table_set_column_index(1)
+                gui:text(tostring(child:has_children()))
+                gui:pop_tree()
+            end
         end
         gui:pop_id()
     end
