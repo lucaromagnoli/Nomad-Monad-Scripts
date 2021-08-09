@@ -9,98 +9,61 @@ require('ReaWrap.models.im_gui')
 require('FXTree')
 
 local reawrap = Reaper:new()
+local fxtree = FXTree:new()
 local gui = ImGui:new('Side FX', ImGui:config_flags_docking_enable())
 local FLT_MIN, FLT_MAX = gui:numeric_limits_float()
 
 
-function create_tree()
-    local node_0, node_1, leaf_0, leaf_1
-    local root = Root:new()
-    for i=0, 2 do
-        node_0 = Node:new()
-        root:add_child(node_0)
-        for j=0, 5 do
-            leaf_0 = Leaf:new()
-            node_0:add_child(leaf_0)
-        end
-        for j=0, 2 do
-            node_1 = Node:new()
-            node_0:add_child(node_1)
-            for z=0, 2 do
-                leaf_1 = Leaf:new()
-                node_1:add_child(leaf_1)
-            end
-        end
-    end
-    for i=0, 2 do
-        leaf = Leaf:new()
-        root:add_child(leaf)
-    end
-    return root
-end
-
---local fxtree = create_tree()
-
-placeholder_members = { 0.0, 0.0, 1.0, 3.1416, 100.0, 999.0, 0.0, 0.0 }
-
-function is_selected_item_double_clicked(sel_item)
+local function is_selected_item_double_clicked(sel_item)
     return sel_item ~= nil
             and gui:is_mouse_double_clicked()
             and gui:is_item_hovered()
 end
 
-local function add_fx_handler(member, mode, fx)
-    local node
-    leaf = FXLeaf:new(fx)
-    if mode == 0 then
-        if member:is_root() then
-            member:add_child(leaf)
-        else
-            member_idx = member.parent:get_child_idx(member)
-            member.parent:add_child(leaf, member_idx + 1)
-        end
-    elseif mode == 1 then
-        if member:is_leaf() then
-            local member_parent = member.parent
-            local member_idx = member_parent:get_child_idx(member)
-            node_parent = FXNode:new()
-            member_parent:remove_child(member)
-            node_parent:add_child(member)
-            member_parent:add_child(node_parent, member_idx)
-            node_child = FXNode:new()
-            node_child:add_child(leaf)
-            node_parent:add_child(node_child)
-        else
-            node = FXNode:new()
-            node:add_child(leaf)
-            member:add_child(node)
-        end
-    end
-end
-
-local function add_fx_menu(child)
+local function add_fx_menu(member)
     if gui:selectable('Add FX serial') then
-        add_fx_handler(child, 0)
-        --reawrap:show_message_box('Add serial FX to ' .. child.id, 'Y0')
+        fxtree:add_fx(member, 0)
     elseif gui:selectable('Add FX parallel') then
-        add_fx_handler(child, 1)
-        --reawrap:show_message_box('Add parallel FX to ' .. child.id, 'Y0')
+        fxtree:add_fx(member, 1)
+    end
+    if not member:is_root() then
+        gui:separator()
+    end
+    if member:is_leaf() then
+        if gui:selectable('Remove FX') then
+            fxtree:remove_fx(member)
+        end
+    elseif member:is_node() then
+        if gui:selectable('Remove Node') then
+            fxtree:remove_fx(member)
+        end
     end
 end
 
 function traverse_fx_tree(children, level)
     level = level or 0
-    local rv
-    for idx, child in ipairs(children) do
+    for _, child in ipairs(children) do
         gui:push_id(child.id)
         gui:table_next_row()
         gui:table_set_column_index(0)
         gui:align_text_to_frame_padding()
+        --is_selected = current_child == child
         if child:has_children() then
-            local open = gui:tree_node_ex(child.id, ('%s'):format(child))
-            if gui:begin_popup_context_item('Leaf pop up') then
-                add_fx_menu(child)
-                gui:end_popup()
+            local open = gui:tree_node_ex(
+                    child.id,
+                    '',
+                    gui:tree_node_flags_default_open()
+            )
+            gui:same_line()
+            if gui:selectable(tostring(child), child.is_selected) then
+                child.is_selected = not child.is_selected
+            end
+            if child.is_selected then
+                fxtree:deselect_all_except(child)
+                if gui:begin_popup_context_item('Node pop up') then
+                    add_fx_menu(child)
+                    gui:end_popup()
+                end
             end
             gui:table_set_column_index(1)
             gui:text(level)
@@ -111,26 +74,25 @@ function traverse_fx_tree(children, level)
                 gui:pop_tree()
             end
         else
-            local flags = gui:tree_node_flags_leaf()
+            local flags = gui:tree_node_flags_leaf() | gui:tree_node_flags_default_open()
             gui:tree_node_ex(child.id, '', flags)
             gui:same_line()
-            is_selected = current_child == child
-            local is_selectable = gui:selectable(tostring(child), is_selected)
-            if gui:begin_popup_context_item('Leaf pop up') then
-                add_fx_menu(child)
-                gui:end_popup()
+            if gui:selectable(tostring(child), child.is_selected) then
+                child.is_selected = not child.is_selected
             end
-            if is_selectable then
-                current_child = child
-            end
-            if is_selected then
-                gui:set_item_default_focus()
+            if child.is_selected then
+                fxtree:deselect_all_except(child)
+                if gui:begin_popup_context_item('Leaf pop up') then
+                    add_fx_menu(child)
+                    gui:end_popup()
+                end
             end
             if is_selected_item_double_clicked(child) then
                 reawrap:show_message_box('Selected ' .. child.id, 'Y0')
             end
             gui:table_set_column_index(1)
-            gui:text(level)
+            --gui:checkbox('Checkbox')
+            gui:text(mbl)
             gui:set_next_item_width(-FLT_MIN)
             gui:pop_tree()
         end
@@ -138,8 +100,6 @@ function traverse_fx_tree(children, level)
     end
 end
 
-local fxtree = FXRoot:new()
-local is_selected
 
 function SideFXEditor()
     gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
@@ -156,16 +116,20 @@ function SideFXEditor()
         gui:table_next_row()
         gui:table_set_column_index(0)
         gui:align_text_to_frame_padding()
-        gui:selectable(tostring(fxtree), is_selected)
-        if gui:begin_popup_context_item('Leaf pop up') then
-            add_fx_menu(fxtree)
-            gui:end_popup()
+        if gui:selectable(tostring(fxtree.root), fxtree.root.is_selected) then
+            fxtree.root.is_selected = not fxtree.root.is_selected
+        end
+        if fxtree.root.is_selected then
+            fxtree:deselect_all_except(fxtree.root)
+            if gui:begin_popup_context_item('Root pop up') then
+                add_fx_menu(fxtree.root)
+                gui:end_popup()
+            end
         end
         gui:table_next_row()
         gui:table_set_column_index(1)
         gui:align_text_to_frame_padding()
-        traverse_fx_tree(fxtree.children)
-
+        traverse_fx_tree(fxtree.root.children)
         gui:end_table()
     end
     gui:pop_style_var()
@@ -174,6 +138,28 @@ function SideFXEditor()
 end
 
 
+multiple = { false, false, false, false, false }
+function selectables_test()
+    gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
+    local rv, open = gui:begin_window('Side FX Editor')
+    if not rv then
+        return open
+    end
+    for i, sel in ipairs(multiple) do
+        if gui:selectable(('Object %d'):format(i - 1), sel) then
+            if (gui:get_key_mods() & gui:key_mod_flags_ctrl()) == 0 then
+                -- Clear selection when CTRL is not held
+                for j = 1, #multiple do
+                    multiple[j] = false
+                end
+            end
+            multiple[i] = not sel
+        end
+    end
+    gui:end_window()
+    return open
+end
+
 function loop()
     open = SideFXEditor()
     if open then
@@ -181,7 +167,6 @@ function loop()
     else
         gui:destroy_context()
     end
-
 end
 
 reawrap:defer(loop)

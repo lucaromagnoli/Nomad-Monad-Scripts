@@ -18,6 +18,7 @@ FXLeaf = Leaf:new()
 function FXLeaf:new(fx)
     local o = self.get_object()
     o.fx = fx
+    o.is_selected = false
     self.__index = self
     setmetatable(o, self)
     return o
@@ -70,6 +71,7 @@ end
 FXRoot = Root:new()
 function FXRoot:new()
     local o = self.get_object()
+    o.is_selected = false
     self.__index = self
     setmetatable(o, self)
     return o
@@ -82,6 +84,7 @@ end
 FXNode = Node:new()
 function FXNode:new()
     local o = self.get_object()
+    o.is_selected = false
     o.splitter = nil
     o.mixer = nil
     self.__index = self
@@ -123,3 +126,45 @@ end
 function FXTree:traverse()
     return traverse_tree(self.root.children)
 end
+
+function FXTree:add_fx(member, mode, fx)
+    local node, member_idx
+    leaf = FXLeaf:new(fx)
+    if mode == 0 then
+        if member:is_root() then
+            member:add_child(leaf)
+        else
+            member_idx = member.parent:get_child_idx(member)
+            member.parent:add_child(leaf, member_idx + 1)
+        end
+    elseif mode == 1 then
+        if member:is_leaf() then
+            member_idx = member.parent:get_child_idx(member)
+            node = FXNode:new()
+            node:add_child(leaf)
+            member.parent:add_child(node, member_idx + 1)
+        else
+            node = FXNode:new()
+            node:add_child(leaf)
+            member:add_child(node)
+        end
+    end
+    leaf.is_selected = true
+    self:deselect_all_except(leaf)
+end
+
+function FXTree:remove_fx(member)
+    member.parent:remove_child(member)
+end
+
+function FXTree:deselect_all_except(member)
+    if not member:is_root() then
+        self.root.is_selected = false
+    end
+    for child, _ in traverse_tree(self.root.children) do
+        if child ~= member then
+            child.is_selected = false
+        end
+    end
+end
+
