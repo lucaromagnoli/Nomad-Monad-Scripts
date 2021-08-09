@@ -43,7 +43,8 @@ end
 
 function maybe_swap_siblings(child, child_idx, siblings)
     if gui:is_item_active() and not gui:is_item_hovered() then
-        local mouse_drag = (({ gui:get_mouse_drag_delta(gui:mouse_button_left()) })[2] < 0 and -1 or 1)
+        local _, drag_y = gui:get_mouse_drag_delta(gui:mouse_button_left())
+        local mouse_drag = drag_y < 0 and -1 or 1
         local n_next = child_idx + mouse_drag
         if n_next >= 1 and n_next < #siblings then
             siblings[child_idx] = siblings[n_next]
@@ -72,9 +73,7 @@ function draw_node(child, child_idx, siblings)
         end
     end
     --- Node attributes
-    gui:table_set_column_index(1)
-    gui:text(level)
-    gui:set_next_item_width(-FLT_MIN)
+    draw_node_attribute_columns()
     return open
 end
 
@@ -93,36 +92,45 @@ function draw_leaf(child, child_idx, siblings)
             gui:end_popup()
         end
     end
-
     if is_selected_item_double_clicked(child) then
         reawrap:show_message_box('Selected ' .. child.id, 'Y0')
     end
-    --- Leaf attributes
+    draw_leaf_attribute_columns()
+end
+
+function draw_column_zero()
+    gui:table_next_row()
+    gui:table_set_column_index(0)
+    gui:align_text_to_frame_padding()
+end
+
+function draw_leaf_attribute_columns()
     gui:table_set_column_index(1)
-    gui:text(mbl)
+    gui:text('leaf attrs')
     gui:set_next_item_width(-FLT_MIN)
-    gui:pop_tree()
+end
+
+function draw_node_attribute_columns()
+    gui:table_set_column_index(1)
+    gui:text('node attrs')
+    --gui:set_next_item_width(-FLT_MIN)
 end
 
 function traverse_fx_tree(children, level)
     level = level or 0
     for idx, child in ipairs(children) do
         gui:push_id(child.id)
-        --- FX Tree Column : column 0
-        gui:table_next_row()
-        gui:table_set_column_index(0)
-        gui:align_text_to_frame_padding()
-
+            draw_column_zero()
             --- Node
         if child:has_children() then
             local open = draw_node(child, idx, children)
-            if open then
-                traverse_fx_tree(child.children, level + 1)
-                gui:pop_tree()
-            end
+                if open then
+                    traverse_fx_tree(child.children, level + 1)
+                    gui:pop_tree()
+                end
         else
-            --- Leaf
             draw_leaf(child, idx, children)
+            gui:pop_tree()
         end
         gui:pop_id()
     end
@@ -140,9 +148,7 @@ function SideFXEditor()
             2,
             gui:table_flags_borders_outer() | gui:table_flags_resizable()
     ) then
-        gui:table_next_row()
-        gui:table_set_column_index(0)
-        gui:align_text_to_frame_padding()
+        draw_column_zero()
         if gui:selectable(tostring(fxtree.root), fxtree.root.is_selected) then
             fxtree.root.is_selected = not fxtree.root.is_selected
         end
