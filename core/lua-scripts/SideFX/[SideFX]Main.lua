@@ -8,6 +8,7 @@ require('ReaWrap.models.project')
 require('ReaWrap.models.im_gui')
 require('FXTree')
 
+local r = reaper
 local reawrap = Reaper:new()
 local fxtree = FXTree:new()
 local gui = ImGui:new('Side FX', ImGui:config_flags_docking_enable())
@@ -40,66 +41,92 @@ local function add_fx_menu(member)
     end
 end
 
+function maybe_swap_siblings(child, child_idx, siblings)
+    if gui:is_item_active() and not gui:is_item_hovered() then
+        local mouse_drag = (({ gui:get_mouse_drag_delta(gui:mouse_button_left()) })[2] < 0 and -1 or 1)
+        local n_next = child_idx + mouse_drag
+        if n_next >= 1 and n_next < #siblings then
+            siblings[child_idx] = siblings[n_next]
+            siblings[n_next] = child
+            gui:reset_mouse_drag_delta(gui:mouse_button_left())
+        end
+    end
+end
+
+function draw_node(child, child_idx, siblings)
+    local open = gui:tree_node_ex(
+            child.id,
+            '',
+            gui:tree_node_flags_default_open()
+    )
+    gui:same_line()
+    if gui:selectable(tostring(child), child.is_selected) then
+        child.is_selected = not child.is_selected
+    end
+    maybe_swap_siblings(child, child_idx, siblings)
+    if child.is_selected then
+        fxtree:deselect_all_except(child)
+        if gui:begin_popup_context_item('Node pop up') then
+            add_fx_menu(child)
+            gui:end_popup()
+        end
+    end
+    --- Node attributes
+    gui:table_set_column_index(1)
+    gui:text(level)
+    gui:set_next_item_width(-FLT_MIN)
+    return open
+end
+
+function draw_leaf(child, child_idx, siblings)
+    local flags = gui:tree_node_flags_leaf() | gui:tree_node_flags_default_open()
+    gui:tree_node_ex(child.id, '', flags)
+    gui:same_line()
+    if gui:selectable(tostring(child), child.is_selected) then
+        child.is_selected = not child.is_selected
+    end
+    maybe_swap_siblings(child, child_idx, siblings)
+    if child.is_selected then
+        fxtree:deselect_all_except(child)
+        if gui:begin_popup_context_item('Leaf pop up') then
+            add_fx_menu(child)
+            gui:end_popup()
+        end
+    end
+
+    if is_selected_item_double_clicked(child) then
+        reawrap:show_message_box('Selected ' .. child.id, 'Y0')
+    end
+    --- Leaf attributes
+    gui:table_set_column_index(1)
+    gui:text(mbl)
+    gui:set_next_item_width(-FLT_MIN)
+    gui:pop_tree()
+end
+
 function traverse_fx_tree(children, level)
     level = level or 0
-    for _, child in ipairs(children) do
+    for idx, child in ipairs(children) do
         gui:push_id(child.id)
+        --- FX Tree Column : column 0
         gui:table_next_row()
         gui:table_set_column_index(0)
         gui:align_text_to_frame_padding()
-        --is_selected = current_child == child
+
+            --- Node
         if child:has_children() then
-            local open = gui:tree_node_ex(
-                    child.id,
-                    '',
-                    gui:tree_node_flags_default_open()
-            )
-            gui:same_line()
-            if gui:selectable(tostring(child), child.is_selected) then
-                child.is_selected = not child.is_selected
-            end
-            if child.is_selected then
-                fxtree:deselect_all_except(child)
-                if gui:begin_popup_context_item('Node pop up') then
-                    add_fx_menu(child)
-                    gui:end_popup()
-                end
-            end
-            gui:table_set_column_index(1)
-            gui:text(level)
-            gui:set_next_item_width(-FLT_MIN)
-            --retval, placeholder_members[i] = gui:input_double('##value', placeholder_members[i], 1.0)
+            local open = draw_node(child, idx, children)
             if open then
                 traverse_fx_tree(child.children, level + 1)
                 gui:pop_tree()
             end
         else
-            local flags = gui:tree_node_flags_leaf() | gui:tree_node_flags_default_open()
-            gui:tree_node_ex(child.id, '', flags)
-            gui:same_line()
-            if gui:selectable(tostring(child), child.is_selected) then
-                child.is_selected = not child.is_selected
-            end
-            if child.is_selected then
-                fxtree:deselect_all_except(child)
-                if gui:begin_popup_context_item('Leaf pop up') then
-                    add_fx_menu(child)
-                    gui:end_popup()
-                end
-            end
-            if is_selected_item_double_clicked(child) then
-                reawrap:show_message_box('Selected ' .. child.id, 'Y0')
-            end
-            gui:table_set_column_index(1)
-            --gui:checkbox('Checkbox')
-            gui:text(mbl)
-            gui:set_next_item_width(-FLT_MIN)
-            gui:pop_tree()
+            --- Leaf
+            draw_leaf(child, idx, children)
         end
         gui:pop_id()
     end
 end
-
 
 function SideFXEditor()
     gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
@@ -137,23 +164,23 @@ function SideFXEditor()
     return open
 end
 
-
-multiple = { false, false, false, false, false }
-function selectables_test()
+items = { 'Item One', 'Item Two', 'Item Three', 'Item Four', 'Item Five' }
+function swappable_test()
+    ctx = gui.ctx
     gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
     local rv, open = gui:begin_window('Side FX Editor')
     if not rv then
         return open
     end
-    for i, sel in ipairs(multiple) do
-        if gui:selectable(('Object %d'):format(i - 1), sel) then
-            if (gui:get_key_mods() & gui:key_mod_flags_ctrl()) == 0 then
-                -- Clear selection when CTRL is not held
-                for j = 1, #multiple do
-                    multiple[j] = false
-                end
+    for n, item in ipairs(items) do
+        gui:selectable(item)
+        if gui:is_item_active() and not gui:is_item_hovered() then
+            local n_next = n + (({ gui:get_mouse_drag_delta(gui:mouse_button_left()) })[2] < 0 and -1 or 1)
+            if n_next >= 1 and n_next < #items then
+                items[n] = items[n_next]
+                items[n_next] = item
+                gui:reset_mouse_drag_delta(gui:mouse_button_left())
             end
-            multiple[i] = not sel
         end
     end
     gui:end_window()
