@@ -12,13 +12,16 @@ end
 require('ReaWrap.models.helpers')
 require('tree')
 
+FXAttributes = {
+    'bypass', 'mix', 'volume', 'pan', 'mute', 'solo', 'sidechain'
+}
+
 
 FXLeaf = Leaf:new()
 ---@param fx any
 function FXLeaf:new(fx)
     local o = self.get_object()
     o.fx = fx
-    o.is_selected = false
     self.__index = self
     setmetatable(o, self)
     return o
@@ -26,6 +29,15 @@ end
 
 function FXLeaf:__tostring()
     return string.format('FXLeaf %s', self.id)
+end
+
+function FXLeaf:get_object()
+    local base_object = Leaf:get_object()
+    base_object.is_selected = false
+    for _, k in ipairs(FXAttributes) do
+        base_object[k] = nil
+    end
+    return base_object
 end
 
 function FXLeaf:log(...)
@@ -84,18 +96,26 @@ end
 FXNode = Node:new()
 function FXNode:new()
     local o = self.get_object()
-    o.is_selected = false
-    o.splitter = nil
-    o.mixer = nil
     self.__index = self
     setmetatable(o, self)
     return o
 end
 
+FXNode = Node:new()
+function FXNode:get_object()
+    local base_object = Node:get_object()
+    base_object.is_selected = false
+    base_object.splitter = nil
+    base_object.mixer = nil
+    for _, k in ipairs(FXAttributes) do
+        base_object[k] = nil
+    end
+    return base_object
+end
+
 function FXNode:__tostring()
     return string.format('FXNode %s', self.id)
 end
-
 
 
 FXTree = {}

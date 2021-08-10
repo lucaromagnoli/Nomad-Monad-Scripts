@@ -73,7 +73,7 @@ function draw_node(child, child_idx, siblings)
         end
     end
     --- Node attributes
-    draw_node_attribute_columns()
+    draw_node_attribute_columns(child)
     return open
 end
 
@@ -95,33 +95,41 @@ function draw_leaf(child, child_idx, siblings)
     if is_selected_item_double_clicked(child) then
         reawrap:show_message_box('Selected ' .. child.id, 'Y0')
     end
-    draw_leaf_attribute_columns()
+    draw_leaf_attribute_columns(child)
 end
 
-function draw_column_zero()
+local function draw_column_zero()
     gui:table_next_row()
     gui:table_set_column_index(0)
     gui:align_text_to_frame_padding()
 end
 
-function draw_leaf_attribute_columns()
-    gui:table_set_column_index(1)
-    gui:text('leaf attrs')
-    gui:set_next_item_width(-FLT_MIN)
+local function draw_attributes_headers()
+    for i, k in ipairs(FXAttributes) do
+        gui:table_set_column_index(i)
+        gui:text(k)
+    end
 end
 
-function draw_node_attribute_columns()
-    gui:table_set_column_index(1)
-    gui:text('node attrs')
-    --gui:set_next_item_width(-FLT_MIN)
+function draw_leaf_attribute_columns(leaf)
+    for i, k in ipairs(FXAttributes) do
+        gui:table_set_column_index(i)
+        gui:text(leaf[k])
+    end
+end
+
+function draw_node_attribute_columns(node)
+    for i, k in ipairs(FXAttributes) do
+        gui:table_set_column_index(i)
+        gui:text(node[k])
+    end
 end
 
 function traverse_fx_tree(children, level)
     level = level or 0
     for idx, child in ipairs(children) do
         gui:push_id(child.id)
-            draw_column_zero()
-            --- Node
+        draw_column_zero()
         if child:has_children() then
             local open = draw_node(child, idx, children)
                 if open then
@@ -145,7 +153,7 @@ function SideFXEditor()
     gui:push_style_var(gui:style_var_frame_padding(), 2, 2)
     if gui:begin_table(
             '##SideFX',
-            2,
+            #FXAttributes + 1,
             gui:table_flags_borders_outer() | gui:table_flags_resizable()
     ) then
         draw_column_zero()
@@ -159,9 +167,7 @@ function SideFXEditor()
                 gui:end_popup()
             end
         end
-        gui:table_next_row()
-        gui:table_set_column_index(1)
-        gui:align_text_to_frame_padding()
+        draw_attributes_headers()
         traverse_fx_tree(fxtree.root.children)
         gui:end_table()
     end
