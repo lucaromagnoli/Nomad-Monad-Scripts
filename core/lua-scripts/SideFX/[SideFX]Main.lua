@@ -14,6 +14,10 @@ local fxtree = FXTree:new()
 local gui = ImGui:new('Side FX', ImGui:config_flags_docking_enable())
 local FLT_MIN, FLT_MAX = gui:numeric_limits_float()
 
+--- Global state
+OpenBrowser = false
+SelMember = nil
+SelAddMode = nil
 
 local function draw_column_zero()
     gui:table_next_row()
@@ -48,11 +52,41 @@ local function is_selected_item_double_clicked(sel_item)
             and gui:is_item_hovered()
 end
 
+function fx_browser()
+    local confirm
+    if OpenBrowser then
+        gui:open_popup('FXBrowser')
+    end
+    if gui:begin_popup_modal('FXBrowser',  OpenBrowser, gui:window_flags_menu_bar()) then
+        gui:text('Hello from Stacked The First\nUsing style.Colors[ImGuiCol_ModalWindowDimBg] behind it.')
+        if gui:button('add fx') then
+            OpenBrowser = false
+            confirm = true
+            gui:close_current_popup()
+        end
+        gui:end_popup()
+    else
+        OpenBrowser = false
+        gui:close_current_popup()
+        confirm = false
+    end
+    if confirm then
+        return confirm, 'fxname'
+    else
+        return confirm, nil
+    end
+end
+
 local function add_fx_menu(member)
     if gui:selectable('Add FX serial') then
-        fxtree:add_fx(member, 0)
-    elseif gui:selectable('Add FX parallel') then
-        fxtree:add_fx(member, 1)
+        OpenBrowser = true
+        SelMember = member
+        SelAddMode = 0
+    end
+    if gui:selectable('Add FX parallel') then
+        OpenBrowser = true
+        SelMember = member
+        SelAddMode = 1
     end
     if not member:is_root() then
         gui:separator()
@@ -100,12 +134,11 @@ function draw_node(child, child_idx, siblings)
         end
     end
     draw_node_attribute_columns(child)
-    return open
 end
 
 function draw_leaf(child, child_idx, siblings)
     local flags = gui:tree_node_flags_leaf() | gui:tree_node_flags_default_open()
-    gui:tree_node_ex(child.id, '', flags)
+    local open = gui:tree_node_ex(child.id, '', flags)
     gui:same_line()
     if gui:selectable(tostring(child), child.is_selected) then
         child.is_selected = not child.is_selected
@@ -139,13 +172,13 @@ function traverse_fx_tree(children, level)
         gui:push_id(child.id)
         draw_column_zero()
         if child:has_children() then
-            local open = draw_node(child, idx, children)
+            open = draw_node(child, idx, children)
                 if open then
                     traverse_fx_tree(child.children, level + 1)
                     gui:pop_tree()
                 end
         else
-            draw_leaf(child, idx, children)
+            open = draw_leaf(child, idx, children)
             gui:pop_tree()
         end
         gui:pop_id()
@@ -182,33 +215,58 @@ function SideFXEditor()
         traverse_fx_tree(fxtree.root.children)
         gui:end_table()
     end
+    local confirm, fx_name = fx_browser(open_browser)
+    if confirm then
+        fxtree:add_fx(SelMember, SelAddMode, fx_name)
+    end
     gui:pop_style_var()
     gui:end_window()
     return open
 end
 
-items = { 'Item One', 'Item Two', 'Item Three', 'Item Four', 'Item Five' }
-function swappable_test()
-    ctx = gui.ctx
-    gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
-    local rv, open = gui:begin_window('Side FX Editor')
-    if not rv then
-        return open
-    end
-    for n, item in ipairs(items) do
-        gui:selectable(item)
-        if gui:is_item_active() and not gui:is_item_hovered() then
-            local n_next = n + (({ gui:get_mouse_drag_delta(gui:mouse_button_left()) })[2] < 0 and -1 or 1)
-            if n_next >= 1 and n_next < #items then
-                items[n] = items[n_next]
-                items[n_next] = item
-                gui:reset_mouse_drag_delta(gui:mouse_button_left())
-            end
-        end
-    end
-    gui:end_window()
-    return open
-end
+
+--function stacked_modal()
+--    gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
+--    local rv, open = gui:begin_window('Side FX Editor')
+--    if not rv then
+--        return open
+--    end
+--    local table_flags = gui:table_flags_borders()
+--            | gui:table_flags_borders_outer()
+--            | gui:table_flags_resizable()
+--    gui:push_style_var(gui:style_var_frame_padding(), 2, 2)
+--    if gui:begin_table(
+--            '##SideFX',
+--            #FXAttributes + 1,
+--            table_flags) then
+--        draw_headers(fxtree)
+--        draw_column_zero()
+--        draw_root_attribute_columns()
+--        --traverse_fx_tree(fxtree.root.children)
+--        gui:end_table()
+--    end
+--     if gui:button('Stacked modals..') then
+--         gui:open_popup('Stacked 1')
+--     end
+--    if gui:begin_popup_modal('Stacked 1', nil, gui:window_flags_menu_bar()) then
+--
+--            gui:text('Hello from Stacked The First\nUsing style.Colors[ImGuiCol_ModalWindowDimBg] behind it.')
+--
+--            ---- Testing behavior of widgets stacking their own regular popups over the modal.
+--            --rv, popups.modal.item = r.ImGui_Combo(ctx, 'Combo', popups.modal.item, 'aaaa\31bbbb\31cccc\31dddd\31eeee\31')
+--            --rv, popups.modal.color = r.ImGui_ColorEdit4(ctx, 'color', popups.modal.color)
+--
+--
+--            if gui:button('Close') then
+--                gui:close_current_popup()
+--            end
+--            gui:end_popup()
+--        end
+--    gui:pop_style_var()
+--    gui:end_window()
+--    return open
+--
+--end
 
 function loop()
     open = SideFXEditor()
