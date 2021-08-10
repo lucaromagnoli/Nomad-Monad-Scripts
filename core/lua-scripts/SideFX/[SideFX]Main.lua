@@ -134,11 +134,12 @@ function draw_node(child, child_idx, siblings)
         end
     end
     draw_node_attribute_columns(child)
+    return open
 end
 
 function draw_leaf(child, child_idx, siblings)
     local flags = gui:tree_node_flags_leaf() | gui:tree_node_flags_default_open()
-    local open = gui:tree_node_ex(child.id, '', flags)
+    gui:tree_node_ex(child.id, '', flags)
     gui:same_line()
     if gui:selectable(tostring(child), child.is_selected) then
         child.is_selected = not child.is_selected
@@ -173,10 +174,10 @@ function traverse_fx_tree(children, level)
         draw_column_zero()
         if child:has_children() then
             open = draw_node(child, idx, children)
-                if open then
-                    traverse_fx_tree(child.children, level + 1)
-                    gui:pop_tree()
-                end
+            if open then
+                traverse_fx_tree(child.children, level + 1)
+                gui:pop_tree()
+            end
         else
             open = draw_leaf(child, idx, children)
             gui:pop_tree()
