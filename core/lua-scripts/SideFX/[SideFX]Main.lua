@@ -15,6 +15,33 @@ local gui = ImGui:new('Side FX', ImGui:config_flags_docking_enable())
 local FLT_MIN, FLT_MAX = gui:numeric_limits_float()
 
 
+local function draw_column_zero()
+    gui:table_next_row()
+    gui:table_set_column_index(0)
+    gui:align_text_to_frame_padding()
+end
+
+local function draw_root_attribute_columns(leaf)
+    for i, k in ipairs(FXAttributes) do
+        gui:table_set_column_index(i)
+        gui:text_disabled('---')
+    end
+end
+
+local function draw_leaf_attribute_columns(leaf)
+    for i, k in ipairs(FXAttributes) do
+        gui:table_set_column_index(i)
+        gui:text(leaf[k])
+    end
+end
+
+local function draw_node_attribute_columns(node)
+    for i, k in ipairs(FXAttributes) do
+        gui:table_set_column_index(i)
+        gui:text(node[k])
+    end
+end
+
 local function is_selected_item_double_clicked(sel_item)
     return sel_item ~= nil
             and gui:is_mouse_double_clicked()
@@ -72,7 +99,6 @@ function draw_node(child, child_idx, siblings)
             gui:end_popup()
         end
     end
-    --- Node attributes
     draw_node_attribute_columns(child)
     return open
 end
@@ -98,31 +124,13 @@ function draw_leaf(child, child_idx, siblings)
     draw_leaf_attribute_columns(child)
 end
 
-local function draw_column_zero()
-    gui:table_next_row()
-    gui:table_set_column_index(0)
-    gui:align_text_to_frame_padding()
-end
-
-local function draw_attributes_headers()
+local function draw_headers(fx_tree)
+    gui:table_setup_column('FX Chain')
     for i, k in ipairs(FXAttributes) do
-        gui:table_set_column_index(i)
+        gui:table_setup_column(k)
         gui:text(k)
     end
-end
-
-function draw_leaf_attribute_columns(leaf)
-    for i, k in ipairs(FXAttributes) do
-        gui:table_set_column_index(i)
-        gui:text(leaf[k])
-    end
-end
-
-function draw_node_attribute_columns(node)
-    for i, k in ipairs(FXAttributes) do
-        gui:table_set_column_index(i)
-        gui:text(node[k])
-    end
+    gui:table_headers_row()
 end
 
 function traverse_fx_tree(children, level)
@@ -150,12 +158,15 @@ function SideFXEditor()
     if not rv then
         return open
     end
+    local table_flags = gui:table_flags_borders()
+            | gui:table_flags_borders_outer()
+            | gui:table_flags_resizable()
     gui:push_style_var(gui:style_var_frame_padding(), 2, 2)
     if gui:begin_table(
             '##SideFX',
             #FXAttributes + 1,
-            gui:table_flags_borders_outer() | gui:table_flags_resizable()
-    ) then
+            table_flags) then
+        draw_headers(fxtree)
         draw_column_zero()
         if gui:selectable(tostring(fxtree.root), fxtree.root.is_selected) then
             fxtree.root.is_selected = not fxtree.root.is_selected
@@ -167,7 +178,7 @@ function SideFXEditor()
                 gui:end_popup()
             end
         end
-        draw_attributes_headers()
+        draw_root_attribute_columns()
         traverse_fx_tree(fxtree.root.children)
         gui:end_table()
     end
