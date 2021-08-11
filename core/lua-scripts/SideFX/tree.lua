@@ -79,6 +79,15 @@ function NodeBase:get_child_idx(child)
     end
 end
 
+function NodeBase:has_child(child)
+    for _, c in ipairs(self.children) do
+        if c == child then
+            return true
+        end
+    end
+    return false
+end
+
 function NodeBase:remove_child(child)
     child.parent = nil
     local child_idx = self:get_child_idx(child)
@@ -146,7 +155,6 @@ end
 function Root:is_node()
     return false
 end
-
 
 Node = NodeBase:new()
 function Node:new()
@@ -223,4 +231,100 @@ function traverse_tree(children)
             return val, level
         end
     end
+end
+
+TrieNode = Node:new()
+
+function TrieNode:new(char)
+    local o = self:get_object()
+    o.char = char
+    self.__index = self
+    setmetatable(o, self)
+    return o
+end
+
+function TrieNode:__tostring()
+    return string.format('TrieNode %s', self.id)
+end
+
+TrieLeaf = Leaf:new()
+
+function TrieLeaf:new(obj)
+    local o = self:get_object()
+    o.object = obj
+    self.__index = self
+    setmetatable(o, self)
+    return o
+end
+
+function TrieLeaf:__tostring()
+    return string.format('TrieLeaf %s', self.id)
+end
+
+
+function TrieNode:add_child_from_char(char)
+    local child_node = self:new(char)
+    self:add_child(child_node)
+    return child_node
+end
+
+function TrieNode:get_child_from_char(char)
+    for i, child in ipairs(self.children) do
+        if child.char == char then
+            return child
+        end
+    end
+end
+
+
+Trie = {}
+
+function Trie:new()
+    local o = {
+        root = TrieNode:new()
+    }
+    self.__index = self
+    setmetatable(o, self)
+    return o
+end
+
+function Trie:__tostring()
+    return string.format('Trie | root %s', self.root)
+end
+
+function Trie:find_word_matches(word)
+    local node = self.root
+    for char in word:gmatch('.') do
+        node = node:get_child_from_char(char)
+    end
+    --for _, c in ipairs(node.children)
+
+end
+
+function trie_from_objects(objects)
+    local trie = Trie:new()
+    local node
+    for _, obj in pairs(objects) do
+        node = trie.root
+        for char in obj.name:gmatch('.') do
+            local child = node:get_child_from_char(char)
+            if child then
+                node = child
+            else
+                node = node:add_child_from_char(char)
+            end
+        end
+        leaf = TrieLeaf:new(obj)
+        node:add_child(leaf)
+    end
+    return trie
+end
+
+function trie_node_has_child(node, child)
+    for i, c in ipairs(node.children) do
+        if c.object.name == child.name then
+            return true
+        end
+    end
+    return false
 end
