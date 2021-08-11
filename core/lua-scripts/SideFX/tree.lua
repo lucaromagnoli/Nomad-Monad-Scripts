@@ -224,7 +224,7 @@ end
 function traverse_tree(children)
     local co_traverse = coroutine.create(depth_first_traverse)
     local status = coroutine.status(co_traverse)
-    while status ~= dead do
+    while status ~= 'dead' do
         return function()
             local _, val, level = coroutine.resume(co_traverse, children)
             status = coroutine.status(co_traverse)
@@ -292,13 +292,59 @@ function Trie:__tostring()
     return string.format('Trie | root %s', self.root)
 end
 
-function Trie:find_word_matches(word)
-    local node = self.root
-    for char in word:gmatch('.') do
-        node = node:get_child_from_char(char)
+local function find_word_matches(root, word)
+    local node = root
+    local has_matches = false
+    local i = 1
+    local chars = Trie:word_to_chars(word)
+    local has_chars = true
+    while has_chars do
+        local char = chars[i]
+        if char ~= nil then
+            new_node = node:get_child_from_char(char)
+            if new_node ~= nil then
+                has_matches = true
+                node = new_node
+                i = i + 1
+            else
+                has_chars = false
+                has_matches = false
+            end
+        else
+            has_chars = false
+        end
     end
-    --for _, c in ipairs(node.children)
+    if node:is_leaf() then
+        coroutine.yield(node)
+    else
+        for child, _ in traverse_tree(node.children) do
+            if child:is_leaf() then
+                coroutine.yield(child)
+            end
+        end
+    end
+end
 
+function Trie:find_word_matches(word)
+    local matches = {}
+    local coro_matches = coroutine.create(find_word_matches)
+    local status = coroutine.status(coro_matches, self.root, word)
+    while status ~= 'dead' do
+        local _, match = coroutine.resume(coro_matches, self.root, word)
+        if match then
+            matches[#matches + 1]  = match
+        end
+        status = coroutine.status(coro_matches, self.root, word)
+    end
+    return matches
+end
+
+function Trie:word_to_chars(word)
+    local chars = {}
+    for char in word:gmatch('.') do
+        chars[#chars + 1] = char
+    end
+    return chars
 end
 
 function trie_from_objects(objects)

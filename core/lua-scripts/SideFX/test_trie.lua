@@ -19,9 +19,11 @@ function get_objects()
     return objs
 end
 
+---global fixture
+objs = get_objects()
+trie = trie_from_objects(objs)
+
 function TestTrieFromObjects()
-    local objs = get_objects()
-    local trie = trie_from_objects(objs)
     local node
     for i, obj in ipairs(objs) do
         node = trie.root
@@ -30,6 +32,14 @@ function TestTrieFromObjects()
         end
         trie_node_has_child(node, obj)
     end
+end
+
+function TestFindWordMatches()
+    local matches = trie:find_word_matches('la')
+    assert(matches[1].object.name == 'lab')
+    assert(matches[2].object.name == 'lake')
+    assert(matches[3].object.name == 'lady')
+    assert(matches[4].object.name == 'law')
 end
 
 local runner = lu.LuaUnit.new()
