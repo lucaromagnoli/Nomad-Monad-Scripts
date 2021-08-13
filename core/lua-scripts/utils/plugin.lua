@@ -28,6 +28,7 @@ function Plugin:get_info()
         format = self:get_format(),
         name = self:get_name(),
         vendor = self:get_vendor(),
+        alias = self:get_alias() --- only for JS
     }
 end
 
@@ -93,13 +94,22 @@ function Plugin:get_name()
     end
 end
 
----@return string
+---@return string|nil
 function Plugin:get_vendor()
     if self.src_file == 'VST' then
         return self._vendor
     elseif self.src_file == 'AU' then
         return self.name
     elseif self.src_file == 'JS' then
+        return nil
+    end
+end
+
+---@return string|nil
+function Plugin:get_alias()
+    if self.src_file == 'JS' then
+        return self.value:gsub('%"', '')
+    else
         return nil
     end
 end
@@ -167,7 +177,7 @@ end
 ---Parse AU INI file
 ---@raise error if the AU ini file does not exist, or the file is corrupted, i.e. missing the [auplugins] section.
 function PluginsManager:parse_au()
-    local kv_pattern = '([%w.%s]+)%s-:%s-(.+)$'
+    local kv_pattern = '([%w.%s]+)%s-:%s?(.+)$'
     local ini_data = self:parse_file(self.au_ini, kv_pattern)
     local au_data = ini_data.auplugins
     if au_data == nil then
