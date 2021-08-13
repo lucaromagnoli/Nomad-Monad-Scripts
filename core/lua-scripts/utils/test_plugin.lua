@@ -21,6 +21,14 @@ function TestIterPluginsAll()
     end
 end
 
+function TestIterPluginsSection()
+    for _, section in ipairs(Plugin.formats) do
+        for i, plugin in plugins_manager:iter_plugins(section) do
+            assert(plugin.format == section)
+        end
+    end
+end
+
 
 
 local runner = lu.LuaUnit.new()

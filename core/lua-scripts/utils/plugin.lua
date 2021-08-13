@@ -246,11 +246,19 @@ local function iter_plugins_section(section)
     end
 end
 
-function PluginsManager:iter_plugins()
+function PluginsManager:iter_plugins(section_name)
     local i = 0
     local function inner()
-        for _, format in ipairs(Plugin.formats) do
-            local section = self.plugins_map[format]
+        if section_name == nil then
+            for _, format in ipairs(Plugin.formats) do
+                local section = self.plugins_map[format]
+                for plugin in iter_plugins_section(section) do
+                    i = i + 1
+                    coroutine.yield(i, plugin)
+                end
+            end
+        else
+            local section = self.plugins_map[section_name]
             for plugin in iter_plugins_section(section) do
                 i = i + 1
                 coroutine.yield(i, plugin)
