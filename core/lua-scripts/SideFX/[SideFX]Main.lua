@@ -2,22 +2,28 @@ local act_ctx = ({ reaper.get_action_context() })[2]
 local parent = act_ctx:match('(.+)SideFX/')
 package.path = package.path .. ';' .. parent .. '?.lua'
 package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
+package.path = package.path .. ';' .. parent .. 'utils/?.lua'
 package.path = package.path .. ';' .. parent .. 'SideFX/?.lua'
 require('ReaWrap.models.reaper')
 require('ReaWrap.models.project')
 require('ReaWrap.models.im_gui')
+require('utils.plugin')
 require('FXTree')
 
 local r = reaper
 local reawrap = Reaper:new()
 local fxtree = FXTree:new()
+local rsrc_path = reawrap:get_resource_path()
+local os = reawrap:get_app_version():match('.+%/(%a+)')
+local plugin_manager = PluginsManager:init(rsrc_path, os)
 local gui = ImGui:new('Side FX', ImGui:config_flags_docking_enable())
 local FLT_MIN, FLT_MAX = gui:numeric_limits_float()
 
 --- Global state
 OpenBrowser = false
 SelMember = nil
-SelAddMode = nil
+FXMenuMode = nil
+selected_plugin = nil
 
 local function draw_column_zero()
     gui:table_next_row()
@@ -52,18 +58,77 @@ local function is_selected_item_double_clicked(sel_item)
             and gui:is_item_hovered()
 end
 
-function fx_browser()
-    local confirm
-    if OpenBrowser then
-        gui:open_popup('FXBrowser')
+
+local current_section_idx = 1
+local current_plugin_idx = -1
+local selected_section
+local selected_plugin
+local plugins_sections = {'All Plugins', 'VST', 'VSTi', 'VST3', 'VST3i', 'AU', 'AUi', 'JS'}
+
+local function iter_plugins_sections()
+    for i, section in ipairs(plugins_sections) do
+        local is_selected = current_section_idx == i
+        if gui:selectable(section, is_selected) then
+            current_section_idx = i
+        end
+        if is_selected then
+            gui:set_item_default_focus()
+            selected_section = section
+        end
     end
+end
+
+local function iter_plugins_by_section(section)
+    for i, plugin in ipairs(plugin_manager.plugins_map[section]) do
+        if plugin.format == 'JS' then
+            gui:selectable(plugin.alias)
+            gui:same_line()
+            gui:text(plugin.format)
+        else
+            gui:selectable(plugin.name)
+            gui:same_line()
+            gui:text(plugin.format)
+        end
+    end
+end
+
+function fx_browser()
     if gui:begin_popup_modal('FXBrowser',  OpenBrowser, gui:window_flags_menu_bar()) then
-        gui:text('Hello from Stacked The First\nUsing style.Colors[ImGuiCol_ModalWindowDimBg] behind it.')
+        -- Left
+        if gui:begin_child('left pane', 150, 0, true) then
+            iter_plugins_sections()
+            gui:end_child()
+        end
+        gui:same_line()
+
+        -- Right
+        gui:begin_group()
+        if gui:begin_child('right pane', 0, -gui:get_frame_height_with_spacing()) then
+            -- Leave room for 1 line below us
+            local retval, buffer = gui:input_text('Search')
+            gui:separator()
+            if retval then
+                gui:text(buffer)
+            else
+                if selected_section == 'All Plugins' then
+                    for _, section in ipairs(plugins_sections) do
+                        if section ~= 'All Plugins' then
+                            iter_plugins_by_section(section)
+                        end
+                    end
+                else
+                    iter_plugins_by_section(selected_section)
+                end
+            end
+            gui:end_child()
+            end
+
         if gui:button('add fx') then
             OpenBrowser = false
             confirm = true
             gui:close_current_popup()
         end
+        gui:end_group()
         gui:end_popup()
     else
         OpenBrowser = false
@@ -77,32 +142,36 @@ function fx_browser()
     end
 end
 
-local function add_fx_menu(member)
+function add_fx_menu(member)
+    SelMember = member
     if gui:selectable('Add FX serial') then
         OpenBrowser = true
+        FXMenuMode = 0
         SelMember = member
-        SelAddMode = 0
-    end
-    if gui:selectable('Add FX parallel') then
+        return
+    elseif gui:selectable('Add FX parallel') then
         OpenBrowser = true
+        FXMenuMode = 1
         SelMember = member
-        SelAddMode = 1
+        return
     end
     if not member:is_root() then
         gui:separator()
     end
     if member:is_leaf() then
         if gui:selectable('Remove FX') then
-            fxtree:remove_fx(member)
+            fxtree:remove_fx(SelMember)
+            return
         end
     elseif member:is_node() then
         if gui:selectable('Remove Node') then
-            fxtree:remove_fx(member)
+            fxtree:remove_fx(SelMember)
+            return
         end
     end
 end
 
-function maybe_swap_siblings(child, child_idx, siblings)
+local function maybe_swap_siblings(child, child_idx, siblings)
     if gui:is_item_active() and not gui:is_item_hovered() then
         local _, drag_y = gui:get_mouse_drag_delta(gui:mouse_button_left())
         local mouse_drag = drag_y < 0 and -1 or 1
@@ -115,7 +184,7 @@ function maybe_swap_siblings(child, child_idx, siblings)
     end
 end
 
-function draw_node(child, child_idx, siblings)
+local function draw_node(child, child_idx, siblings)
     local open = gui:tree_node_ex(
             child.id,
             '',
@@ -137,7 +206,7 @@ function draw_node(child, child_idx, siblings)
     return open
 end
 
-function draw_leaf(child, child_idx, siblings)
+local function draw_leaf(child, child_idx, siblings)
     local flags = gui:tree_node_flags_leaf() | gui:tree_node_flags_default_open()
     gui:tree_node_ex(child.id, '', flags)
     gui:same_line()
@@ -167,8 +236,9 @@ local function draw_headers(fx_tree)
     gui:table_headers_row()
 end
 
-function traverse_fx_tree(children, level)
+local function traverse_fx_tree(children, level)
     level = level or 0
+    local open
     for idx, child in ipairs(children) do
         gui:push_id(child.id)
         draw_column_zero()
@@ -216,58 +286,18 @@ function SideFXEditor()
         traverse_fx_tree(fxtree.root.children)
         gui:end_table()
     end
+    if OpenBrowser then
+        gui:open_popup('FXBrowser')
+    end
     local confirm, fx_name = fx_browser(open_browser)
     if confirm then
-        fxtree:add_fx(SelMember, SelAddMode, fx_name)
+        fxtree:add_fx(SelMember, FXMenuMode, fx_name)
     end
     gui:pop_style_var()
     gui:end_window()
     return open
 end
 
-
---function stacked_modal()
---    gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
---    local rv, open = gui:begin_window('Side FX Editor')
---    if not rv then
---        return open
---    end
---    local table_flags = gui:table_flags_borders()
---            | gui:table_flags_borders_outer()
---            | gui:table_flags_resizable()
---    gui:push_style_var(gui:style_var_frame_padding(), 2, 2)
---    if gui:begin_table(
---            '##SideFX',
---            #FXAttributes + 1,
---            table_flags) then
---        draw_headers(fxtree)
---        draw_column_zero()
---        draw_root_attribute_columns()
---        --traverse_fx_tree(fxtree.root.children)
---        gui:end_table()
---    end
---     if gui:button('Stacked modals..') then
---         gui:open_popup('Stacked 1')
---     end
---    if gui:begin_popup_modal('Stacked 1', nil, gui:window_flags_menu_bar()) then
---
---            gui:text('Hello from Stacked The First\nUsing style.Colors[ImGuiCol_ModalWindowDimBg] behind it.')
---
---            ---- Testing behavior of widgets stacking their own regular popups over the modal.
---            --rv, popups.modal.item = r.ImGui_Combo(ctx, 'Combo', popups.modal.item, 'aaaa\31bbbb\31cccc\31dddd\31eeee\31')
---            --rv, popups.modal.color = r.ImGui_ColorEdit4(ctx, 'color', popups.modal.color)
---
---
---            if gui:button('Close') then
---                gui:close_current_popup()
---            end
---            gui:end_popup()
---        end
---    gui:pop_style_var()
---    gui:end_window()
---    return open
---
---end
 
 function loop()
     open = SideFXEditor()
