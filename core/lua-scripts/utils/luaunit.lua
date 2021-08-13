@@ -1,1 +1,1 @@
-./luaunit.lua
+../luaunit/luaunit.lua
