@@ -235,11 +235,23 @@ function PluginsManager:load_plugins()
     end
 end
 
-function PluginsManager:iter_all_plugins()
+local function iter_plugins_section(section)
+    local i = 0
+    return function()
+        i = i + 1
+        local plugin = section[i]
+        if plugin ~= nil then
+            return plugin
+        end
+    end
+end
+
+function PluginsManager:iter_plugins()
     local i = 0
     local function inner()
         for _, format in ipairs(Plugin.formats) do
-            for _, plugin in ipairs(self.plugins_map[format]) do
+            local section = self.plugins_map[format]
+            for plugin in iter_plugins_section(section) do
                 i = i + 1
                 coroutine.yield(i, plugin)
             end
