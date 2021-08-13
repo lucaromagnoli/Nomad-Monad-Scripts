@@ -1,7 +1,6 @@
 require('ReaWrap.models.helpers')
 
 function read_file(file)
-    printer(file)
     local f = assert(io.open(file, "rb"))
     local content = f:read("*all")
     f:close()
@@ -11,7 +10,6 @@ end
 function iter_lines(text)
     return text:gmatch("([^\r\n]+)\r?\n")
 end
-
 
 IniFileParser = {}
 function IniFileParser:new(source_path)
@@ -44,7 +42,6 @@ function IniFileParser:parse_file(fpath, kv_pattern)
 			ini_table[section] = section_data
             sections_order[#sections_order + 1] = section
 		end
-
 		-- Key-value pairs
 		local key, value = line:match(kv_pattern)
 		if key and value ~= nil then
