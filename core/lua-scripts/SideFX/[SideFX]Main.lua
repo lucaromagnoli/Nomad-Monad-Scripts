@@ -66,10 +66,11 @@ local selected_plugin
 local plugins_sections = {'All Plugins', 'VST', 'VSTi', 'VST3', 'VST3i', 'AU', 'AUi', 'JS'}
 
 local function iter_plugins_sections()
-    for i, section in ipairs(plugins_sections) do
-        local is_selected = current_section_idx == i
+    for s_idx, section in ipairs(plugins_sections) do
+        local is_selected = current_section_idx == s_idx
         if gui:selectable(section, is_selected) then
-            current_section_idx = i
+            current_section_idx = s_idx
+            current_plugin_idx = -1
         end
         if is_selected then
             gui:set_item_default_focus()
@@ -78,16 +79,24 @@ local function iter_plugins_sections()
     end
 end
 
-local function iter_plugins_by_section(section)
-    for i, plugin in ipairs(plugin_manager.plugins_map[section]) do
+local function iter_plugins(section)
+    local is_selectable, name
+    for p_idx, plugin in plugin_manager:iter_plugins(section) do
+        local is_selected = current_plugin_idx == p_idx
         if plugin.format == 'JS' then
-            gui:selectable(plugin.alias)
-            gui:same_line()
-            gui:text(plugin.format)
+            name = plugin.alias
         else
-            gui:selectable(plugin.name)
-            gui:same_line()
-            gui:text(plugin.format)
+             name = plugin.name
+        end
+        _, is_selectable = gui:selectable(name, is_selected)
+        gui:same_line()
+        gui:text(plugin.format)
+        if is_selectable then
+            current_plugin_idx = p_idx
+        end
+        if is_selected then
+            gui:set_item_default_focus()
+            selected_plugin= plugin
         end
     end
 end
@@ -111,14 +120,9 @@ function fx_browser()
                 gui:text(buffer)
             else
                 if selected_section == 'All Plugins' then
-                    for _, section in ipairs(plugins_sections) do
-                        if section ~= 'All Plugins' then
-                            iter_plugins_by_section(section)
-                        end
-                    end
-                else
-                    iter_plugins_by_section(selected_section)
+                    selected_section = nil
                 end
+                iter_plugins(selected_section)
             end
             gui:end_child()
             end
