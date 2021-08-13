@@ -234,3 +234,24 @@ function PluginsManager:load_plugins()
         table.insert(self.plugins_map[plugin_info.format], plugin_info)
     end
 end
+
+function PluginsManager:iter_all_plugins()
+    local i = 0
+    local function inner()
+        for _, format in ipairs(Plugin.formats) do
+            for _, plugin in ipairs(self.plugins_map[format]) do
+                i = i + 1
+                coroutine.yield(i, plugin)
+            end
+        end
+    end
+    local iter_coro = coroutine.create(inner)
+    local status = coroutine.status(iter_coro)
+    while status ~= 'dead' do
+        return function()
+            local _, idx, plugin = coroutine.resume(iter_coro)
+            status = coroutine.status(iter_coro)
+            return idx, plugin
+        end
+    end
+end
