@@ -10,9 +10,8 @@ require('ReaWrap.models.im_gui')
 require('utils.plugin')
 require('FXTree')
 
-local r = reaper
 local reawrap = Reaper:new()
-local fxtree = FXTree:new()
+local project = Project:new()
 local rsrc_path = reawrap:get_resource_path()
 local os = reawrap:get_app_version():match('.+%/(%a+)')
 local plugin_manager = PluginsManager:init(rsrc_path, os)
@@ -20,10 +19,14 @@ local gui = ImGui:new('Side FX', ImGui:config_flags_docking_enable())
 local FLT_MIN, FLT_MAX = gui:numeric_limits_float()
 
 --- Global state
-OpenBrowser = false
-SelMember = nil
-FXMenuMode = nil
-selected_plugin = nil
+local OpenBrowser = false
+local SelMember = nil
+local FXMenuMode = nil
+local selected_section
+local current_section_idx = 1
+local selected_plugin = nil
+local current_plugin_idx = -1
+local plugins_sections = {'All Plugins', 'VST', 'VSTi', 'VST3', 'VST3i', 'AU', 'AUi', 'JS'}
 
 local function draw_column_zero()
     gui:table_next_row()
@@ -57,13 +60,6 @@ local function is_selected_item_double_clicked(sel_item)
             and gui:is_mouse_double_clicked()
             and gui:is_item_hovered()
 end
-
-
-local current_section_idx = 1
-local current_plugin_idx = -1
-local selected_section
-local selected_plugin
-local plugins_sections = {'All Plugins', 'VST', 'VSTi', 'VST3', 'VST3i', 'AU', 'AUi', 'JS'}
 
 local function iter_plugins_sections()
     for s_idx, section in ipairs(plugins_sections) do
@@ -140,7 +136,7 @@ function fx_browser()
         confirm = false
     end
     if confirm then
-        return confirm, 'fxname'
+        return confirm, selected_plugin
     else
         return confirm, nil
     end
@@ -162,15 +158,17 @@ function add_fx_menu(member)
     if not member:is_root() then
         gui:separator()
     end
-    if member:is_leaf() then
+    if SelMember:is_leaf() then
         if gui:selectable('Remove FX') then
-            fxtree:remove_fx(SelMember)
-            return
+            if SelMember:is_only_child() and not SelMember.parent:is_root() then
+                fxtree:remove_fx(SelMember.parent)
+            else
+                fxtree:remove_fx(SelMember)
+            end
         end
-    elseif member:is_node() then
+    elseif SelMember:is_node() then
         if gui:selectable('Remove Node') then
             fxtree:remove_fx(SelMember)
-            return
         end
     end
 end
@@ -260,7 +258,7 @@ local function traverse_fx_tree(children, level)
     end
 end
 
-function SideFXEditor()
+function SideFXEditor(fxtree)
     gui:set_next_window_size(430, 450, ImGui:cond_first_use_ever())
     local rv, open = gui:begin_window('Side FX Editor')
     if not rv then
@@ -293,18 +291,21 @@ function SideFXEditor()
     if OpenBrowser then
         gui:open_popup('FXBrowser')
     end
-    local confirm, fx_name = fx_browser(open_browser)
+    local confirm, fx = fx_browser(open_browser)
     if confirm then
-        fxtree:add_fx(SelMember, FXMenuMode, fx_name)
+        fxtree:add_fx(SelMember, FXMenuMode, fx)
     end
     gui:pop_style_var()
     gui:end_window()
     return open
 end
 
+for track in project:iter_selected_tracks() do
+    fxtree = FXTree:new(track)
+end
 
 function loop()
-    open = SideFXEditor()
+    open = SideFXEditor(fxtree)
     if open then
         reawrap:defer(loop)
     else
