@@ -43,6 +43,16 @@ function Leaf:is_leaf()
     return true
 end
 
+function Leaf:is_only_child()
+    local count = 0
+    for _, c in ipairs(self.parent.children) do
+        if c ~= self then
+            count = count + 1
+        end
+    end
+    return count == 0
+end
+
 NodeBase = {}
 function NodeBase:new()
     local o = {}
