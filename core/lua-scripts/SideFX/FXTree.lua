@@ -28,7 +28,7 @@ function FXLeaf:new(fx)
 end
 
 function FXLeaf:__tostring()
-    return string.format('FXLeaf %s', self.id)
+    return string.format(self.fx.name)
 end
 
 function FXLeaf:get_object()
@@ -48,7 +48,6 @@ end
 function FXLeaf:get_type()
     return 'FXLeaf'
 end
-
 
 function FXLeaf:iter_input_mappings()
     for pin in self.fx:iter_input_pins() do
@@ -114,7 +113,7 @@ function FXNode:get_object()
 end
 
 function FXNode:__tostring()
-    return string.format('FXNode %s', self.id)
+    return string.format('Parallel Chain')
 end
 
 
@@ -135,6 +134,10 @@ function FXTree:log(...)
     logger(...)
 end
 
+function FXTree:__tostring()
+    return string.format('FXTree %s', self.track:get_name())
+end
+
 function FXTree:init()
     self:log(self.track)
     for fx in self.track:iter_fx_chain() do
@@ -147,6 +150,8 @@ function FXTree:traverse()
     return traverse_tree(self.root.children)
 end
 
+---@param member table
+---@param mode number : 0 for serial 1 for parallel
 function FXTree:add_fx(member, mode, fx)
     local node, member_idx
     leaf = FXLeaf:new(fx)
@@ -187,4 +192,3 @@ function FXTree:deselect_all_except(member)
         end
     end
 end
-
