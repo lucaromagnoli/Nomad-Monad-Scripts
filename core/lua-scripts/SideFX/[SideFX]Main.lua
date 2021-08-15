@@ -19,6 +19,7 @@ local gui = ImGui:new('Side FX', ImGui:config_flags_docking_enable())
 local FLT_MIN, FLT_MAX = gui:numeric_limits_float()
 
 --- Global state
+--local project_fx_trees = load_project_fx_trees()
 local project_fx_trees = {}
 local open_browser = false
 local sel_member = nil
@@ -28,6 +29,20 @@ local current_section_idx = 1
 local selected_plugin = nil
 local current_plugin_idx = -1
 local plugins_sections = {'All Plugins', 'VST', 'VSTi', 'VST3', 'VST3i', 'AU', 'AUi', 'JS'}
+
+local function save_project_fx_trees()
+    for _, fxtree in pairs(project_fx_trees) do
+        fxtree:save_state()
+    end
+end
+
+local function load_project_fx_trees()
+    for track in project:iter_tracks() do
+        local tree = FXTree:new(track)
+        tree:load_state()
+        project_fx_trees[track:GUID()] = tree
+    end
+end
 
 local function draw_column_zero()
     gui:table_next_row()
@@ -270,7 +285,7 @@ function side_fx_editor(fxtree)
             table_flags) then
         draw_headers(fxtree)
         draw_column_zero()
-        if gui:selectable(tostring(fxtree.root), fxtree.root.is_selected) then
+        if gui:selectable(tostring(fxtree.track:get_name()), fxtree.root.is_selected) then
             fxtree.root.is_selected = not fxtree.root.is_selected
         end
         if fxtree.root.is_selected then
@@ -310,7 +325,6 @@ function side_fx_window(fxtree)
 end
 
 
-
 function loop()
     if project:has_selected_tracks() then
         for track in project:iter_selected_tracks() do
@@ -319,8 +333,8 @@ function loop()
                 track_fx_tree = FXTree:new(track)
                 project_fx_trees[track:GUID()] = track_fx_tree
             end
-            open = side_fx_window(track_fx_tree)
         end
+        open = side_fx_window(track_fx_tree)
     else
         open = side_fx_window(nil)
     end
@@ -331,4 +345,6 @@ function loop()
     end
 end
 
+--load_project_fx_trees()
 reawrap:defer(loop)
+--reawrap:atexit(save_project_fx_trees)

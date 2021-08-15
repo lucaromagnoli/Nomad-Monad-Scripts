@@ -61,6 +61,11 @@ function NodeBase:new()
     return o
 end
 
+function NodeBase:log(...)
+    logger = log_func('NodeBase')
+    logger(...)
+end
+
 ---@param child table object<Leaf | Node> : Must have a `parent` attribute.
 function NodeBase:add_child(child, pos)
     if child == self then
