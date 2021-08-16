@@ -38,8 +38,7 @@ end
 
 local function load_project_fx_trees()
     for track in project:iter_tracks() do
-        local tree = FXTree:new(track)
-        tree:load_state()
+        tree = FXTree:load_state(project, track)
         project_fx_trees[track:GUID()] = tree
     end
 end
@@ -159,7 +158,7 @@ function fx_browser()
 end
 
 function add_fx_menu(fxtree, member)
-    sel_member = member
+    sel_member = member  ---don't touch this, it's needed.
     if gui:selectable('Add FX serial') then
         open_browser = true
         fx_menu_mode = 0
@@ -228,6 +227,10 @@ local function draw_leaf(fxtree, child, child_idx, siblings)
     local flags = gui:tree_node_flags_leaf() | gui:tree_node_flags_default_open()
     gui:tree_node_ex(child.id, '', flags)
     gui:same_line()
+    if not fxtree:fx_is_valid(child.fx_guid) then
+        fxtree:remove_child(child)
+        return
+    end
     if gui:selectable(tostring(child), child.is_selected) then
         child.is_selected = not child.is_selected
     end
@@ -329,10 +332,6 @@ function loop()
     if project:has_selected_tracks() then
         for track in project:iter_selected_tracks() do
             track_fx_tree = project_fx_trees[track:GUID()]
-            if track_fx_tree == nil then
-                track_fx_tree = FXTree:new(track)
-                project_fx_trees[track:GUID()] = track_fx_tree
-            end
         end
         open = side_fx_window(track_fx_tree)
     else
@@ -345,6 +344,6 @@ function loop()
     end
 end
 
---load_project_fx_trees()
+load_project_fx_trees()
 reawrap:defer(loop)
---reawrap:atexit(save_project_fx_trees)
+reawrap:atexit(save_project_fx_trees)
