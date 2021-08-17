@@ -7,10 +7,13 @@ else
     parent = act_ctx:match('(.+)SideFX/')
     package.path = package.path .. ';' .. parent .. '?.lua'
     package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
+    package.path = package.path .. ';' .. parent .. 'utils/?.lua'
 end
 
 require('ReaWrap.models.helpers')
 require('tree')
+require('binary')
+
 
 FXAttributes = {
     'bypass', 'mix', 'volume', 'pan', 'mute', 'solo', 'sidechain'
@@ -31,7 +34,6 @@ end
 function FXLeaf:__tostring()
     return string.format(self:get_fx_name())
 end
-
 
 function FXLeaf:get_object()
     local base_object = Leaf:get_object()
@@ -57,7 +59,6 @@ function FXLeaf:get_fx()
     return self.track:fx_from_guid(self.fx_guid)
 end
 
-
 ---Get the name of the FX encapsulated by the leaf
 ---@return string
 function FXLeaf:get_fx_name()
@@ -71,41 +72,12 @@ function FXLeaf:get_fx_idx()
     return self:get_fx().idx
 end
 
-
 function FXLeaf:save_state()
     return ('{id = "%s" , fx_guid = "%s", is_selected = "%s", type_ = "%s"}'):format(
             self.id, self.fx_guid, self.is_selected, self:get_type()
     )
 end
 
-function FXLeaf:iter_input_mappings()
-    for pin in self.fx:iter_input_pins() do
-        local bitmask, _ = pin:get_mappings()
-        self:log(self.fx, pin, bitmask)
-    end
-    --local function iter_pins()
-    --    for pin in self.fx:iter_input_pins() do
-    --        local bitmask, high32 = pin:get_mappings()
-    --        coroutine.yield(pin, bitmask, high32)
-    --    end
-    --end
-    --local iter_coro = coroutine.create(iter_pins)
-    --local status = coroutine.status(iter_coro)
-    --while status ~= dead do
-    --    return function()
-    --        local pin, bitmask, high32 = coroutine.resume(iter_coro)
-    --        status = coroutine.status(iter_coro)
-    --        return pin, bitmask, high32
-    --    end
-    --end
-end
-
-function FXLeaf:get_output_mappings()
-    for pin in self.fx:iter_output_pins() do
-        local bitmask, high32 = pin:get_mappings()
-        return pin, bitmask, high32
-    end
-end
 
 ---Save object state. Applies to Root and Node.
 ---@param o table
@@ -155,6 +127,7 @@ function FXRoot:save_state()
     return save_state(self)
 end
 
+
 FXNode = Node:new()
 function FXNode:new()
     local o = self.get_object()
@@ -163,12 +136,13 @@ function FXNode:new()
     return o
 end
 
-FXNode = Node:new()
 function FXNode:get_object()
     local base_object = Node:get_object()
     base_object.is_selected = false
-    base_object.splitter = nil
-    base_object.mixer = nil
+    base_object.gain = nil
+    base_object.summing = nil
+    base_object.inputs = {}
+    base_object.outputs = {}
     for _, k in ipairs(FXAttributes) do
         base_object[k] = nil
     end
@@ -198,6 +172,9 @@ function FXNode:get_last_fx_idx()
 end
 
 function FXNode:get_previous_leaf_sibling()
+    if not self.parent:has_children() then
+        return nil
+    end
     local idx = self.parent:get_child_idx(self) - 1 --previous sibling
     while idx >= 0 do
         local child = self.parent[idx]
@@ -242,7 +219,7 @@ end
 
 function FXTree:init()
     for fx in self.track:iter_fx_chain() do
-        local fx_leaf = FXLeaf:new(fx)
+        local fx_leaf = FXLeaf:new(fx:GUID())
         self.root:add_child(fx_leaf)
     end
 end
@@ -261,40 +238,45 @@ function FXTree:add_fx(member, mode, plugin)
     local leaf
     if mode == 0 then
         if member:is_root() then
-            local fx_guid = self:add_fx_plugin(plugin)
+            local fx_guid = self:add_fx_plugin(plugin):GUID()
             leaf = FXLeaf:new(fx_guid, self.track)
             member:add_child(leaf)
         elseif member:is_node() then
             local member_idx = member.parent:get_child_idx(member)
             local previous_leaf = member:get_previous_leaf_sibling()
             if previous_leaf == nil then
-                local fx_guid = self:add_fx_plugin(plugin)
+                local fx_guid = self:add_fx_plugin(plugin):GUID()
                 leaf = FXLeaf:new(fx_guid, self.track)
                 member.parent:add_child(leaf)
             else
                 local last_fx_idx = previous_leaf:get_fx_idx()
-                local fx_guid = self:add_fx_plugin(plugin, last_fx_idx + 1)
+                local fx_guid = self:add_fx_plugin(plugin, last_fx_idx + 1):GUID()
                 leaf = FXLeaf:new(fx_guid, self.track)
                 member.parent:add_child(leaf, member_idx + 1)
             end
         else
             local member_idx = member.parent:get_child_idx(member)
             local fx_idx = member:get_fx_idx()
-            local fx_guid = self:add_fx_plugin(plugin, fx_idx + 1)
+            local fx_guid = self:add_fx_plugin(plugin, fx_idx + 1):GUID()
             leaf = FXLeaf:new(fx_guid, self.track)
             member.parent:add_child(leaf, member_idx + 1)
         end
     elseif mode == 1 then
-        if member:is_leaf() then
-            member_idx = member.parent:get_child_idx(member)
-            node = FXNode:new()
-            node:add_child(leaf)
-            member.parent:add_child(node, member_idx + 1)
+        if member:is_root() or member:is_node() then
+            self:new_node(member)
         else
-            node = FXNode:new()
-            node:add_child(leaf)
-            member:add_child(node)
+
         end
+        --if member:is_leaf() then
+        --    member_idx = member.parent:get_child_idx(member)
+        --    node = FXNode:new()
+        --    node:add_child(leaf)
+        --    member.parent:add_child(node, member_idx + 1)
+        --else
+        --    node = FXNode:new()
+        --    node:add_child(leaf)
+        --    member:add_child(node)
+        --end
     end
     leaf.is_selected = true
     self:deselect_all_except(leaf)
@@ -303,12 +285,11 @@ end
 
 ---@param plugin table
 ---@param position number
----@return string the FX GUID
+---@return table the TrackFX object
 function FXTree:add_fx_plugin(plugin, position)
     position = position or -1
     position = 1000 + position
-    local fx = self.track:fx_add_by_name(plugin.name, false, -position)
-    return fx:GUID()
+    return self.track:fx_add_by_name(plugin.name, false, -position)
 end
 
 
@@ -316,10 +297,66 @@ function FXTree:remove_fx(member)
     local fx_idx = member:get_fx_idx()
     self.track:fx_delete(fx_idx)
     self:remove_child(member)
+    self:save_state()
 end
 
 function FXTree:remove_child(member)
     member.parent:remove_child(member)
+end
+
+function FXTree:new_node(parent)
+    local node = FXNode:new()
+    parent:add_child(node)
+    local prev_leaf = node:get_previous_leaf_sibling()
+    local prev_idx = prev_leaf:get_fx_idx()
+    node.inputs = self:get_inputs(prev_leaf)
+    node.outputs = self:get_outputs(node.inputs)
+    node_gain = self:add_fx_plugin('JS: SideFX - Gain', prev_idx + 1)
+    node.gain = node_gain:GUID()
+    self:set_gain_inputs(node_gain)
+    self:set_gain_outputs(node_gain)
+    node_summing = self:add_fx_plugin('JS: SideFX - Summing', prev_idx + 1)
+    self:set_summing_inputs(node_summing)
+    self:set_summing_outputs(node_summing)
+    node.summing = node_summing:GUID()
+end
+
+---A node takes its inputs from the previous fx in the chain
+function FXTree:get_inputs(sibling)
+    local outputs = {}
+    local fx = sibling:get_fx()
+    local out_pins = fx:get_output_pins()
+    for _, o in ipairs(out_pins) do
+        local m, _ = o:get_mappings()
+        local b = Binary:from_decimal(m)
+        local bits_indices = b:to_bits_indices()
+        outputs[#outputs + 1] = bits_indices
+    end
+    return self:transform_inputs(outputs)
+end
+
+---Validate inputs and return them as a two items table {l, r}
+function FXTree:transform_inputs(outputs)
+    local out_1 = outputs[1]  --left
+    local out_2 = outputs[2]  --right
+    --- there should be only one output per channel
+    assert(#out_1 == 1)
+    assert(#out_2 == 2)
+    --- difference between left and right should be 1, e.g. left 1 right 2
+    assert(out_2[1] - out_1[1] == 1)
+    return {out_1[1], out_2[1]}
+end
+
+---A node has 2 stereo outputs in total. One for the dry signal, one for the fxchain.
+---The dry signal outputs on the two channels subsequent to the input and the fx signal on the
+---two channels subsequent to the dry signal. E.g. If the input is 1-2 then the dry output
+---will be on 3-4 and the fx output will be on 5-6.
+function FXTree:get_outputs(inputs)
+    dry_l = inputs[1] + 2
+    dry_r = inputs[2] + 2
+    fx_l = dry_l + 2
+    fx_r = dry_r + 2
+    return {{dry_l, dry_r}, {fx_l, fx_r}}
 end
 
 function FXTree:deselect_all_except(member)
