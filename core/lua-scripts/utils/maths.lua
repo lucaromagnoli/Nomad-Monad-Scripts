@@ -57,3 +57,9 @@ function bin_to_dec(bits)
     end
     return math.floor(buf)
 end
+
+
+function log_base(number, base)
+    return math.log(number) / math.log(base)
+end
+
