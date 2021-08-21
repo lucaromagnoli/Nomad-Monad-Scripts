@@ -288,7 +288,7 @@ function side_fx_editor(fxtree)
             table_flags) then
         draw_headers(fxtree)
         draw_column_zero()
-        if gui:selectable(tostring(fxtree.track:get_name()), fxtree.root.is_selected) then
+        if gui:selectable(tostring(fxtree.root.id), fxtree.root.is_selected) then
             fxtree.root.is_selected = not fxtree.root.is_selected
         end
         if fxtree.root.is_selected then
