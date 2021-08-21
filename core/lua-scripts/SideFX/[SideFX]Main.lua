@@ -329,9 +329,15 @@ end
 
 
 function loop()
+    local track_fx_tree
     if project:has_selected_tracks() then
         for track in project:iter_selected_tracks() do
-            track_fx_tree = project_fx_trees[track:GUID()]
+            if project_fx_trees[track:GUID()] == nil then
+                track_fx_tree = FXTree:load_state(project, track)
+                project_fx_trees[track:GUID()] = track_fx_tree
+            else
+                track_fx_tree = project_fx_trees[track:GUID()]
+            end
         end
         open = side_fx_window(track_fx_tree)
     else
@@ -344,6 +350,6 @@ function loop()
     end
 end
 
-load_project_fx_trees()
+--load_project_fx_trees()
 reawrap:defer(loop)
 reawrap:atexit(save_project_fx_trees)
