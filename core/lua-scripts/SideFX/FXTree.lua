@@ -1,7 +1,8 @@
 local info = debug.getinfo(3, "Sl")
 if info.short_src ==  'test_FXTree.lua' then
-    local l_path = package.path:gmatch("(.-)?.lua;")()
-    package.path = package.path .. ';' .. l_path .. 'ReaWrap/models/?.lua'
+    local parent = package.path:gmatch("(.-)?.lua;")()
+    package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
+    package.path = package.path .. ';' .. parent .. 'utils/?.lua'
 else
     act_ctx = ({ reaper.get_action_context() })[2]
     parent = act_ctx:match('(.+)SideFX/')
@@ -13,6 +14,31 @@ end
 require('ReaWrap.models.helpers')
 require('tree')
 require('maths')
+
+local function serialize(o)
+    local buffer = ''
+    for k, v in pairs(o) do
+        local vtype = type(v)
+        if k == 'inputs' then
+            buffer = buffer .. ('%s = {%s}'):format(k, table.concat(v, ', '))
+        elseif k == 'outputs' then
+            local dry = table.concat(v.dry, ', ')
+            local wet = table.concat(v.wet, ', ')
+            buffer = buffer .. ('%s = {dry = {%s}, wet = {%s}}'):format(k, dry, wet)
+        elseif k == 'parent' then
+            buffer = buffer .. ('%s = %q'):format(k, tostring(o.parent.id))
+        elseif vtype == 'number' or vtype == 'boolean' then
+            buffer = buffer .. ('%s = %s'):format(k, v)
+        elseif vtype == 'string' then
+            buffer = buffer .. ('%s = %q'):format(k, v)
+        else
+            goto continue
+        end
+        buffer = buffer .. ', '
+        ::continue::
+    end
+    return '{' .. buffer .. '}'
+end
 
 
 FXAttributes = {
@@ -26,20 +52,21 @@ function FXLeaf:new(fx_guid, track)
     local o = self.get_object()
     o.fx_guid = fx_guid
     o.track = track
+    o.ttype = 'FXLeaf'
     self.__index = self
     setmetatable(o, self)
     return o
 end
 
 function FXLeaf:__tostring()
-    return string.format(self:get_fx_name())
+    return ('FXLeaf %s'):format(self.id)
 end
 
 function FXLeaf:get_object()
     local base_object = Leaf:get_object()
     base_object.is_selected = false
-    for _, k in ipairs(FXAttributes) do
-        base_object[k] = nil
+    for _, v in pairs(FXAttributes) do
+        base_object[v] = ''
     end
     return base_object
 end
@@ -49,9 +76,6 @@ function FXLeaf:log(...)
     logger(...)
 end
 
-function FXLeaf:get_type()
-    return 'FXLeaf'
-end
 
 ---Return a reference to the fx object
 ---@return table : ReaWrap.TrackFX
@@ -72,43 +96,11 @@ function FXLeaf:get_fx_idx()
     return self:get_fx().idx
 end
 
-function FXLeaf:save_state()
-    return ('{id = "%s" , fx_guid = "%s", is_selected = "%s", type_ = "%s"}'):format(
-            self.id, self.fx_guid, self.is_selected, self:get_type()
-    )
-end
-
-
----Save object state. Applies to Root and Node.
----@param o table
----@return string
-local function save_state(o)
-    local function save_children_state(children, buffer)
-        for _, c in ipairs(children) do
-            if c:has_children() then
-                buffer = save_children_state(c.children, buffer)
-            else
-                buffer = buffer .. c:save_state() .. ', '
-            end
-        end
-        return buffer
-    end
-    if o:has_children() then
-        children_buffer = save_children_state(o.children, '')
-    end
-
-    return ('return { id = "%s", is_selected = %s, type = "%s", children = { %s } }'):format(
-            o.id,
-            o.is_selected,
-            o:get_type(),
-            children_buffer
-    )
-end
-
 
 FXRoot = Root:new()
 function FXRoot:new()
     local o = self.get_object()
+    o.ttype = 'FXRoot'
     o.is_selected = true
     self.__index = self
     setmetatable(o, self)
@@ -116,15 +108,33 @@ function FXRoot:new()
 end
 
 function FXRoot:__tostring()
-    return string.format('FXRoot %s', self.id)
-end
-
-function FXRoot:get_type()
-    return 'FXRoot'
+    return ('FXRoot %s'):format(self.id)
 end
 
 function FXRoot:save_state()
-    return save_state(self)
+    local buffer = serialize(self) .. '; '
+    for c, l in traverse_tree(self.children) do
+        buffer = buffer .. serialize(c) .. '; '
+    end
+    return buffer
+end
+
+local function get_constructor(ttype)
+    if ttype == 'FXRoot' then
+        return FXRoot
+    elseif ttype == 'FXNode' then
+        return FXNode
+    elseif ttype == 'FXLeaf' then
+        return FXLeaf
+    end
+end
+
+local function load_object_state(constructor, data)
+    local object = constructor:new()
+    for k,v in pairs(data) do
+        object[k] = v
+    end
+    return object
 end
 
 
@@ -138,24 +148,22 @@ end
 
 function FXNode:get_object()
     local base_object = Node:get_object()
+    base_object.ttype = 'FXNode'
     base_object.is_selected = false
-    base_object.gain = nil
-    base_object.summing = nil
+    base_object.gain = ''
+    base_object.summing = ''
     base_object.inputs = {}
     base_object.outputs = {}
     for _, k in ipairs(FXAttributes) do
-        base_object[k] = nil
+        base_object[k] = ''
     end
     return base_object
 end
 
 function FXNode:__tostring()
-    return string.format('Parallel Chain')
+    return ('FXNode %s'):format(self.id)
 end
 
-function FXNode:get_type()
-    return 'FXNode'
-end
 
 ---Get the index of the last FX nested under the node
 ---@return number
@@ -183,13 +191,32 @@ function FXNode:get_previous_leaf_sibling()
     return nil
 end
 
-function FXNode:save_state()
-    return save_state(self)
-end
-
-
 local function fx_is_valid(track, guid)
     return track:fx_from_guid(guid) ~= nil
+end
+
+function load_state(state_string, track)
+    local object, constructor, root
+    local objects = {}
+    for line in state_string:gmatch("([^;]+)") do
+        line = 'return ' .. line
+        local member = load(line)()
+        if member ~=nil then
+            constructor = get_constructor(member.ttype)
+            object = load_object_state(constructor, member)
+            objects[object.id] = object
+            if object.ttype == 'FXRoot' then
+                root = object
+            elseif object.ttype == 'FXLeaf' then
+                object.track = track
+            end
+            if object.ttype == 'FXNode' or object.ttype == 'FXLeaf' then
+                local parent = objects[object.parent]
+                parent:add_child(object)
+            end
+        end
+    end
+    return root
 end
 
 FXTree = {}
@@ -323,7 +350,9 @@ function FXTree:new_parallel_chain(parent, plugin)
     local fx = self:add_fx_plugin(plugin.name, node_gain.idx + 1)
     self:set_node_fx_inputs(node.inputs, fx)
     self:set_node_fx_outputs(node.outputs.wet, fx)
-    return FXLeaf:new(fx:GUID(), self.track)
+    local leaf = FXLeaf:new(fx:GUID(), self.track)
+    node:add_child(leaf)
+    return leaf
 end
 
 ---A node takes its inputs from the previous fx in the chain, or from 1,2 if the
@@ -413,51 +442,11 @@ end
 ---@param track table : ReaWrap.Track
 ---@return table: FXTree
 function FXTree:load_state(project, track)
+    local tree = self:new(project, track)
     local state_string = project:get_ext_state('FXTree', track:GUID())
     root = load_state(state_string, track)
-    local tree = FXTree:new(project, track)
-    tree.root = root
+    if root then
+        tree.root = root
+    end
     return tree
-end
-
-TypesTable = {
-    FXRoot = FXRoot,
-    FXNode = FXNode,
-    FXLeaf = FXLeaf
-}
-
-
-local function recurse_children(src_tbl, parent, track)
-    for i, c in ipairs(src_tbl) do
-        local ttype = TypesTable[c.type_]
-        local obj = ttype:new()
-        if obj:is_leaf() and fx_is_valid(track, c.fx_guid) then
-            obj.fx_guid = c.fx_guid
-            obj.track = track
-        else
-            goto continue
-        end
-        table.insert(parent.children, obj)
-        obj.parent = parent
-        obj.id = c.id
-        obj.is_selected = c.is_selected == 'true'
-        if c.children ~= nil then
-            recurse_children(c.children, obj, track)
-        end
-        ::continue::
-    end
-end
-
-function load_state(state_string, track)
-    local state_table = load(state_string)()
-    root = FXRoot:new()
-    if state_table ~= nil then
-        local children = {}
-        root.id = state_table.id
-        root.children = children
-        if state_table.children ~= nil then
-            recurse_children(state_table.children, root, track)
-        end
-    end
-    return root
 end
