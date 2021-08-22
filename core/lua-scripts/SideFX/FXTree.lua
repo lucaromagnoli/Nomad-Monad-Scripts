@@ -22,9 +22,13 @@ local function serialize(o)
         if k == 'inputs' then
             buffer = buffer .. ('%s = {%s}'):format(k, table.concat(v, ', '))
         elseif k == 'outputs' then
-            local dry = table.concat(v.dry, ', ')
-            local wet = table.concat(v.wet, ', ')
-            buffer = buffer .. ('%s = {dry = {%s}, wet = {%s}}'):format(k, dry, wet)
+            if v.dry ~= nil  and v.wet ~= nil then
+                local dry = table.concat(v.dry, ', ')
+                local wet = table.concat(v.wet, ', ')
+                buffer = buffer .. ('%s = {dry = {%s}, wet = {%s}}'):format(k, dry, wet)
+            else
+                goto continue
+            end
         elseif k == 'parent' then
             buffer = buffer .. ('%s = %q'):format(k, tostring(o.parent.id))
         elseif vtype == 'number' or vtype == 'boolean' then
@@ -47,25 +51,25 @@ FXAttributes = {
 FXLeaf = Leaf:new()
 ---@param fx_guid string : The GUID of the FX wrapped by the leaf
 function FXLeaf:new(fx_guid)
-    local o = self.get_object()
-    o.ttype = 'FXLeaf'
-    o.fx_guid = fx_guid
+    local o = self:get_object(fx_guid)
     self.__index = self
     setmetatable(o, self)
     return o
 end
 
-function FXLeaf:__tostring()
-    return ('FXLeaf %s'):format(self.id)
-end
-
-function FXLeaf:get_object()
+function FXLeaf:get_object(fx_guid)
     local base_object = Leaf:get_object()
+    base_object.ttype = 'FXLeaf'
+    base_object.fx_guid = fx_guid
     base_object.is_selected = false
     for _, v in pairs(FXAttributes) do
         base_object[v] = ''
     end
     return base_object
+end
+
+function FXLeaf:__tostring()
+    return ('FXLeaf %s'):format(self.id)
 end
 
 function FXLeaf:log(...)
@@ -93,33 +97,24 @@ function FXLeaf:get_fx_idx()
     return self:get_fx().idx
 end
 
-FXBranch = {}
----@param parent table FXRoot (always)
-function FXBranch:new(parent)
-    local o = self:get_object(parent)
-    o.ttype = 'FXBranch'
-    o.summing_guid = ''
-    o.children = {}
+FXBranch = Node:new()
+function FXBranch:new()
+    local o = self:get_object()
     self.__index = self
     setmetatable(o, self)
     return o
 end
 
----@param parent table FXRoot (always)
-function FXBranch:get_object(parent)
-    return { parent = parent }
+function FXBranch:get_object()
+    local base_object = Node:get_object()
+    base_object.parent = ''
+    base_object.ttype = 'FXBranch'
+    base_object.summing_guid = ''
+    return base_object
 end
 
-function FXBranch:has_children()
-    return #self.children > 0
-end
-
-function FXBranch:add_child(node, position)
-    if position then
-        table.insert(self.children, node, position)
-    else
-        table.insert(self.children, node)
-    end
+function FXBranch:__tostring()
+    return ('FXBranch %s'):format(self.id)
 end
 
 function FXBranch:get_idx()
@@ -138,18 +133,18 @@ function FXBranch:get_previous_sibling()
 end
 
 ---Get the summing FX for the given branch.
+---@param track table ReaWrap.Track
 function FXBranch:get_summing(track)
     return track:fx_from_guid(self.summing_guid)
 end
 
 function FXBranch:set_summing_inputs(track)
-    local inputs = {}
     local left_bitmask, right_bitmask = 0, 0
-    for i, node in ipairs(self.descendants) do
+    for _, node in ipairs(self.children) do
         left_bitmask = left_bitmask + node.dry[1] + node.wet[1]
         right_bitmask = right_bitmask + node.dry[2] + node.wet[2]
     end
-    local summing = track:fx_from_guid(self.summing_guid)
+    local summing = self:get_summing(track)
     local input_pins = summing:get_input_pins()
     input_pins[1]:set_mappings(left_bitmask)
     input_pins[2]:set_mappings(right_bitmask)
@@ -256,7 +251,7 @@ local function load_object_state(constructor, data)
 end
 
 function load_state(state_string, track)
-    local object, constructor, root, o_type
+    local constructor, o_type, object, root
     local objects = {}
     for line in state_string:gmatch("([^;]+)") do
         line = 'return ' .. line
@@ -268,10 +263,7 @@ function load_state(state_string, track)
             o_type = object.ttype
             if o_type == 'FXRoot' then
                 root = object
-            elseif o_type == 'FXLeaf' then
-                object.track = track
-            end
-            if o_type == 'FXBranch' or o_type == 'FXNode' or o_type == 'FXLeaf' then
+            elseif o_type == 'FXBranch' or o_type == 'FXNode' or o_type == 'FXLeaf' then
                 local parent = objects[object.parent]
                 parent:add_child(object)
             end
@@ -288,6 +280,8 @@ FXTree = {}
 
 function FXTree:new(project, track)
     local o = {
+        id = uuid4(),
+        ttype = 'FXTree',
         root = FXRoot:new(),
         project = project,
         track = track
@@ -318,7 +312,8 @@ function FXTree:traverse()
 end
 
 function FXTree:fx_is_valid(fx_guid)
-    return fx_is_valid(self.track, fx_guid)
+    local v = self.track:fx_from_guid(fx_guid) ~= nil
+    return v
 end
 
 ---@param plugin_name string
@@ -381,7 +376,7 @@ function FXTree:add_fx(member, mode, plugin)
     elseif mode == 1 then
         local branch, summing_fx, summing_idx
         if member:is_root() then
-            branch = FXBranch:new(summing_guid)
+            branch = FXBranch:new()
             member:add_child(branch)
             node = FXNode:new()
             branch:add_child(node)
@@ -391,12 +386,12 @@ function FXTree:add_fx(member, mode, plugin)
                 summing_idx = prev_summing.idx + 1
             end
             summing_fx = self:add_summing_fx(summing_idx)
+            branch.summing_guid = summing_fx:GUID()
             summing_idx = summing_fx.idx
             local fx_guid = self:add_fx_plugin(plugin.name, summing_idx):GUID()
             node.gain_guid = self:add_gain_fx(summing_idx):GUID()
             leaf = FXLeaf:new(fx_guid)
             node:add_child(leaf)
-
         elseif member:is_node() then
             node = FXNode:new()
             member:add_child(node)
@@ -514,8 +509,8 @@ end
 function FXTree:load_state(project, track)
     local tree = self:new(project, track)
     local state_string = project:get_ext_state('FXTree', track:GUID())
-    root = load_state(state_string, track)
-    if root then
+    local root = load_state(state_string, track)
+    if root ~= nil then
         tree.root = root
     end
     return tree

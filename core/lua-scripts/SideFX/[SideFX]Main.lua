@@ -174,7 +174,7 @@ function add_fx_menu(fxtree, member)
         gui:separator()
     end
     if sel_member:is_leaf() then
-        if gui:selectable('Remove FX') then
+        if gui:selectable('Remove Serial FX') then
             if sel_member:is_only_child() and not sel_member.parent:is_root() then
                 fxtree:remove_fx(sel_member.parent)
             else
@@ -182,7 +182,7 @@ function add_fx_menu(fxtree, member)
             end
         end
     elseif sel_member:is_node() then
-        if gui:selectable('Remove Node') then
+        if gui:selectable('Remove Parallel FX') then
             fxtree:remove_fx(sel_member)
         end
     end
@@ -261,6 +261,10 @@ local function traverse_fx_tree(fxtree, children, level)
     level = level or 0
     local open
     for idx, child in ipairs(children) do
+        if child.ttype == 'FXBranch' then
+            traverse_fx_tree(fxtree, child.children, level)
+            goto done
+        end
         gui:push_id(child.id)
         draw_column_zero()
         if child:has_children() then
@@ -274,6 +278,7 @@ local function traverse_fx_tree(fxtree, children, level)
             gui:pop_tree()
         end
         gui:pop_id()
+        ::done::
     end
 end
 
@@ -350,6 +355,5 @@ function loop()
     end
 end
 
---load_project_fx_trees()
 reawrap:defer(loop)
 reawrap:atexit(save_project_fx_trees)
