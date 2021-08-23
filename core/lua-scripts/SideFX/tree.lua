@@ -43,14 +43,18 @@ function Leaf:is_leaf()
     return true
 end
 
-function Leaf:is_only_child()
+local function is_only_child(child)
     local count = 0
-    for _, c in ipairs(self.parent.children) do
-        if c ~= self then
+    for _, c in ipairs(child.parent.children) do
+        if c ~= child then
             count = count + 1
         end
     end
     return count == 0
+end
+
+function Leaf:is_only_child()
+    return is_only_child(self)
 end
 
 NodeBase = {}
@@ -201,6 +205,10 @@ end
 
 function Node:is_node()
     return true
+end
+
+function Node:is_only_child()
+    return is_only_child(self)
 end
 
 ---@param child table <Leaf | Node>
