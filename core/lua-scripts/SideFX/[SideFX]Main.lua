@@ -157,14 +157,14 @@ function fx_browser()
     end
 end
 
-function add_fx_menu(fxtree, member)
+function operations_menu(fxtree, member)
     sel_member = member  ---don't touch this, it's needed.
-    if gui:selectable('Add FX serial') then
+    if gui:selectable('Add FX to chain') then
         open_browser = true
         fx_menu_mode = 0
         sel_member = member
         return
-    elseif gui:selectable('Add FX parallel') then
+    elseif gui:selectable('Add parallel chain') then
         open_browser = true
         fx_menu_mode = 1
         sel_member = member
@@ -182,8 +182,8 @@ function add_fx_menu(fxtree, member)
             end
         end
     elseif sel_member:is_node() then
-        if gui:selectable('Remove Parallel FX') then
-            fxtree:remove_fx(sel_member)
+        if gui:selectable('Remove Parallel Chain') then
+            fxtree:remove_parallel_chain(sel_member)
         end
     end
 end
@@ -215,7 +215,7 @@ local function draw_node(fxtree, child, child_idx, siblings)
     if child.is_selected then
         fxtree:deselect_all_except(child)
         if gui:begin_popup_context_item('Node pop up') then
-            add_fx_menu(fxtree, child)
+            operations_menu(fxtree, child)
             gui:end_popup()
         end
     end
@@ -238,7 +238,7 @@ local function draw_leaf(fxtree, child, child_idx, siblings)
     if child.is_selected then
         fxtree:deselect_all_except(child)
         if gui:begin_popup_context_item('Leaf pop up') then
-            add_fx_menu(fxtree, child)
+            operations_menu(fxtree, child)
             gui:end_popup()
         end
     end
@@ -261,10 +261,6 @@ local function traverse_fx_tree(fxtree, children, level)
     level = level or 0
     local open
     for idx, child in ipairs(children) do
-        if child.ttype == 'FXBranch' then
-            traverse_fx_tree(fxtree, child.children, level)
-            goto done
-        end
         gui:push_id(child.id)
         draw_column_zero()
         if child:has_children() then
@@ -299,7 +295,7 @@ function side_fx_editor(fxtree)
         if fxtree.root.is_selected then
             fxtree:deselect_all_except(fxtree.root)
             if gui:begin_popup_context_item('Root pop up') then
-                add_fx_menu(fxtree, fxtree.root)
+                operations_menu(fxtree, fxtree.root)
                 gui:end_popup()
             end
         end
@@ -312,7 +308,7 @@ function side_fx_editor(fxtree)
     end
     local confirm, fx = fx_browser(open_browser)
     if confirm then
-        fxtree:add_fx(sel_member, fx_menu_mode, fx)
+        fxtree:operations_handler(sel_member, fx_menu_mode, fx)
     end
     gui:pop_style_var()
 end

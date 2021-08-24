@@ -16,22 +16,16 @@ require('ReaWrap.models.constants')
 require('tree')
 require('maths')
 
+---Ad hoc object serialization
+---@param o table
 local function serialize(o)
     local buffer = ''
     for k, v in pairs(o) do
         local vtype = type(v)
-        if k == 'inputs' then
-            buffer = buffer .. ('%s = {%s}'):format(k, table.concat(v, ', '))
-        elseif k == 'outputs' then
-            if v.dry ~= nil  and v.wet ~= nil then
-                local dry = table.concat(v.dry, ', ')
-                local wet = table.concat(v.wet, ', ')
-                buffer = buffer .. ('%s = {dry = {%s}, wet = {%s}}'):format(k, dry, wet)
-            else
-                goto continue
-            end
-        elseif k == 'parent' then
+        if k == 'parent' then
             buffer = buffer .. ('%s = %q'):format(k, tostring(o.parent.id))
+        elseif k == 'inputs' or k == 'outputs' then
+            buffer = buffer .. ('%s = {%s}'):format(k, table.concat(v, ', '))
         elseif vtype == 'number' or vtype == 'boolean' then
             buffer = buffer .. ('%s = %s'):format(k, v)
         elseif vtype == 'string' then
@@ -46,7 +40,7 @@ local function serialize(o)
 end
 
 FXAttributes = {
-    'bypass', 'mix', 'volume', 'pan', 'mute', 'solo', 'sidechain'
+    'bypass', 'volume', 'pan', 'mute', 'solo', 'sidechain'
 }
 
 FXLeaf = Leaf:new()
@@ -96,43 +90,6 @@ end
 ---@return number
 function FXLeaf:get_fx_idx()
     return self:get_fx().idx
-end
-
-
----placheholder
-function set_node_outputs(node)
-    local dry, wet
-    if next(self.outputs) == nil then
-        dry_exp = {2, 3}
-        wet_exp = {4, 5}
-    else
-        local last_used = self.outputs[#self.outputs].wet_exp
-        dry_exp = { last_used[1] + 2, last_used[2] + 2 }
-        wet_exp = { last_used[1] + 4, last_used[2] + 4 }
-    end
-    dry = { math.floor(2 ^ dry_exp[1]), math.floor(2 ^ dry_exp[2]) }
-    wet = { math.floor(2 ^ wet_exp[1]), math.floor(2 ^ wet_exp[2]) }
-    table.insert(
-            self.outputs,
-            {
-                dry_exp = dry_exp,
-                wet_exp = wet_exp
-            }
-    )
-    node.outputs = {dry = dry, wet = wet}
-end
-
-
-function set_summing_inputs(track)
-    local l_bitmask, r_bitmask = 0, 0
-    for _, out in ipairs(self.outputs) do
-        l_bitmask = l_bitmask + math.floor(2 ^ out.dry_exp[1] + 2 ^ out.wet_exp[1])
-        r_bitmask = r_bitmask + math.floor(2 ^ out.dry_exp[2] + 2 ^ out.wet_exp[2])
-    end
-    local summing_fx = self:get_summing(track)
-    local input_pins = summing_fx:get_input_pins()
-    input_pins[1]:set_mappings(l_bitmask)
-    input_pins[2]:set_mappings(r_bitmask)
 end
 
 FXNode = Node:new()
@@ -205,6 +162,29 @@ function FXNode:set_io(track)
         end
     end
 end
+
+function FXNode:set_outputs()
+    local dry, wet
+    if next(self.outputs) == nil then
+        dry_exp = {2, 3}
+        wet_exp = {4, 5}
+    else
+        local last_used = self.outputs[#self.outputs].wet_exp
+        dry_exp = { last_used[1] + 2, last_used[2] + 2 }
+        wet_exp = { last_used[1] + 4, last_used[2] + 4 }
+    end
+    dry = { math.floor(2 ^ dry_exp[1]), math.floor(2 ^ dry_exp[2]) }
+    wet = { math.floor(2 ^ wet_exp[1]), math.floor(2 ^ wet_exp[2]) }
+    table.insert(
+            self.outputs,
+            {
+                dry_exp = dry_exp,
+                wet_exp = wet_exp
+            }
+    )
+    node.outputs = {dry = dry, wet = wet}
+end
+
 
 function FXNode:set_fx_inputs(inputs, fx)
     --- a plugin may have aux inputs, we only care about 1 and 2.
@@ -322,13 +302,8 @@ function FXTree:init()
     end
 end
 
-function FXTree:traverse()
-    return traverse_tree(self.root.children)
-end
-
 function FXTree:fx_is_valid(fx_guid)
-    local v = self.track:fx_from_guid(fx_guid) ~= nil
-    return v
+    return self.track:fx_from_guid(fx_guid) ~= nil
 end
 
 ---@param plugin_name string
@@ -360,27 +335,10 @@ function FXTree:remove_child(member)
 end
 
 
-function FXTree:remove_parallel_chain(member)
-    local branch = member.parent
-    local summing = self.track:fx_from_guid(branch.summing_guid)
-    self.track:fx_delete(summing.idx)
-    self:log(member.gain_guid)
-    local gain = self.track:fx_from_guid(member.gain_guid)
-    self.track:fx_delete(gain.idx)
-    for i, child in ipairs(member.children) do
-        local fx = self.track:fx_from_guid(child.fx_guid)
-        self.track:fx_delete(fx.idx)
-    end
-    branch:remove_child(node)
-    if branch:is_only_child() then
-        self:remove_child(branch)
-    end
-    self:set_io()
-end
-
+---Handle the operations selected via GUI context menu
 ---@param member table
 ---@param mode number : 0 for serial 1 for parallel
-function FXTree:add_fx(member, mode, plugin)
+function FXTree:operations_handler(member, mode, plugin)
     local leaf
     if mode == 0 then
         if member:is_root() then
@@ -427,6 +385,18 @@ function FXTree:set_io()
             child:set_io(self.track)
         end
     end
+end
+
+function FXTree:set_summing_inputs(track)
+    local l_bitmask, r_bitmask = 0, 0
+    for _, out in ipairs(self.outputs) do
+        l_bitmask = l_bitmask + math.floor(2 ^ out.dry_exp[1] + 2 ^ out.wet_exp[1])
+        r_bitmask = r_bitmask + math.floor(2 ^ out.dry_exp[2] + 2 ^ out.wet_exp[2])
+    end
+    local summing_fx = self:get_summing(track)
+    local input_pins = summing_fx:get_input_pins()
+    input_pins[1]:set_mappings(l_bitmask)
+    input_pins[2]:set_mappings(r_bitmask)
 end
 
 function FXTree:deselect_all_except(member)
