@@ -12,6 +12,7 @@ else
 end
 
 require('ReaWrap.models.helpers')
+require('ReaWrap.models.constants')
 require('tree')
 require('maths')
 
@@ -97,72 +98,9 @@ function FXLeaf:get_fx_idx()
     return self:get_fx().idx
 end
 
-FXBranch = Node:new()
-function FXBranch:new()
-    local o = self:get_object()
-    self.__index = self
-    setmetatable(o, self)
-    return o
-end
 
-function FXBranch:get_object()
-    local base_object = Node:get_object()
-    base_object.parent = ''
-    base_object.ttype = 'FXBranch'
-    base_object.summing_guid = ''
-    base_object.outputs = {}
-    return base_object
-end
-
-function FXBranch:__tostring()
-    return ('FXBranch %s'):format(self.id)
-end
-
----Overrides parent method
-function FXBranch:is_node()
-    return false
-end
-
-function FXBranch:is_branch()
-    return true
-end
-
-function FXBranch:get_idx()
-    for i, node in ipairs(self.parent.children) do
-        if node == self then
-            return i
-        end
-    end
-end
-
-function FXBranch:get_previous_sibling()
-    local idx = self:get_idx() - 1
-    if idx > 0 then
-        return self.parent.children[idx]
-    end
-end
-
-function FXBranch:set_io(track)
-    self.outputs = {}
-    for child, level in traverse_tree(self.children) do
-        if child.ttype == 'FXNode' then
-            self:set_node_inputs(child, track)
-            self:set_node_outputs(child, track)
-            child:set_io(track)
-        end
-    end
-    self:set_summing_inputs(track)
-end
-
-function FXBranch:set_node_inputs(node)
-    if node.parent:is_branch() then
-        node.inputs = {1, 2}
-    elseif node.parent:is_node() then
-        node.inputs = node.parent.outputs.wet
-    end
-end
-
-function FXBranch:set_node_outputs(node)
+---placheholder
+function set_node_outputs(node)
     local dry, wet
     if next(self.outputs) == nil then
         dry_exp = {2, 3}
@@ -184,13 +122,8 @@ function FXBranch:set_node_outputs(node)
     node.outputs = {dry = dry, wet = wet}
 end
 
----Get the summing FX for the given branch.
----@param track table ReaWrap.Track
-function FXBranch:get_summing(track)
-    return track:fx_from_guid(self.summing_guid)
-end
 
-function FXBranch:set_summing_inputs(track)
+function set_summing_inputs(track)
     local l_bitmask, r_bitmask = 0, 0
     for _, out in ipairs(self.outputs) do
         l_bitmask = l_bitmask + math.floor(2 ^ out.dry_exp[1] + 2 ^ out.wet_exp[1])
@@ -426,6 +359,25 @@ function FXTree:remove_child(member)
     member.parent:remove_child(member)
 end
 
+
+function FXTree:remove_parallel_chain(member)
+    local branch = member.parent
+    local summing = self.track:fx_from_guid(branch.summing_guid)
+    self.track:fx_delete(summing.idx)
+    self:log(member.gain_guid)
+    local gain = self.track:fx_from_guid(member.gain_guid)
+    self.track:fx_delete(gain.idx)
+    for i, child in ipairs(member.children) do
+        local fx = self.track:fx_from_guid(child.fx_guid)
+        self.track:fx_delete(fx.idx)
+    end
+    branch:remove_child(node)
+    if branch:is_only_child() then
+        self:remove_child(branch)
+    end
+    self:set_io()
+end
+
 ---@param member table
 ---@param mode number : 0 for serial 1 for parallel
 function FXTree:add_fx(member, mode, plugin)
@@ -456,52 +408,18 @@ function FXTree:add_fx(member, mode, plugin)
             member.parent:add_child(leaf, member_idx + 1)
         end
     elseif mode == 1 then
-        local branch, summing_fx, summing_idx
-        if member:is_root() then
-            branch = FXBranch:new()
-            member:add_child(branch)
-            node = FXNode:new()
-            branch:add_child(node)
-            local prev_branch = branch:get_previous_sibling()
-            if prev_branch ~= nil then
-                local prev_summing = prev_branch:get_summing(self.track)
-                summing_idx = prev_summing.idx + 1
-            end
-            summing_fx = self:add_summing_fx(summing_idx)
-            branch.summing_guid = summing_fx:GUID()
-            summing_idx = summing_fx.idx
-            local fx_guid = self:add_fx_plugin(plugin.name, summing_idx):GUID()
-            node.gain_guid = self:add_gain_fx(summing_idx):GUID()
-            leaf = FXLeaf:new(fx_guid)
-            node:add_child(leaf)
-        elseif member:is_node() then
-            node = FXNode:new()
-            member:add_child(node)
-            branch = member.parent
-            summing_fx = branch:get_summing(self.track)
-            summing_idx = summing_fx.idx
-            local fx_guid = self:add_fx_plugin(plugin.name, summing_idx):GUID()
-            node.gain_guid = self:add_gain_fx(summing_idx):GUID()
-            leaf = FXLeaf:new(fx_guid)
-            node:add_child(leaf)
-        else
-            local parent_node = member.parent
-            node = FXNode:new()
-            parent_node:add_child(node)
-            branch = parent_node.parent
-            summing_fx = branch:get_summing(self.track)
-            summing_idx = summing_fx.idx
-            local fx_guid = self:add_fx_plugin(plugin.name, summing_idx):GUID()
-            node.gain_guid = self:add_gain_fx(summing_idx):GUID()
-            leaf = FXLeaf:new(fx_guid)
-            node:add_child(leaf)
-        end
-        self:set_io()
+
     end
     leaf.is_selected = true
     self:deselect_all_except(leaf)
     --self:save_state()
 end
+
+---@param channels number (even numbers up to 64)
+function FXTree:set_channels(channels)
+    self.track:set_info_value(TrackInfoValue.I_NCHAN, channels)
+end
+
 
 function FXTree:set_io()
     for i, child in ipairs(self.root.children) do
