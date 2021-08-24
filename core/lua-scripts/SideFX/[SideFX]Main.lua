@@ -159,7 +159,7 @@ end
 
 function operations_menu(fxtree, member)
     sel_member = member  ---don't touch this, it's needed.
-    if gui:selectable('Add FX to chain') then
+    if gui:selectable('Add FX') then
         open_browser = true
         fx_menu_mode = 0
         sel_member = member
@@ -174,7 +174,7 @@ function operations_menu(fxtree, member)
         gui:separator()
     end
     if sel_member:is_leaf() then
-        if gui:selectable('Remove Serial FX') then
+        if gui:selectable('Remove FX') then
             if sel_member:is_only_child() and not sel_member.parent:is_root() then
                 fxtree:remove_fx(sel_member.parent)
             else
@@ -182,7 +182,7 @@ function operations_menu(fxtree, member)
             end
         end
     elseif sel_member:is_node() then
-        if gui:selectable('Remove Parallel Chain') then
+        if gui:selectable('Remove parallel chain') then
             fxtree:remove_parallel_chain(sel_member)
         end
     end
