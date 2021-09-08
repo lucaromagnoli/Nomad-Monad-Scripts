@@ -48,7 +48,6 @@ function SetSourceTrackState(project, source_track)
     )
 end
 
-
 function BypassFxChain(fx_chain)
     for _, fx in ipairs(fx_chain) do
         if not fx:is_instrument() then

@@ -131,6 +131,13 @@ function FXNode:get_last_fx_idx()
     return _get_last_fx_idx(self.children)
 end
 
+function FXNode:get_previous_sibling()
+    local idx = self.parent:get_child_idx(self) - 1
+    if idx > 0 then
+        return self.parent.children[idx]
+    end
+end
+
 function FXNode:get_previous_leaf_sibling()
     local idx = self.parent:get_child_idx(self) - 1 --previous sibling
     while idx > 0 do
@@ -143,10 +150,12 @@ function FXNode:get_previous_leaf_sibling()
     return nil
 end
 
-function FXNode:get_previous_sibling()
-    local idx = self.parent:get_child_idx(self) - 1
-    if idx > 0 then
-        return self.parent.children[idx]
+function FXNode:get_previous_fx_idx()
+    local prev_sibling = self:get_previous_sibling()
+    if prev_sibling ~= nil then
+        if prev_sibling:is_leaf() then
+
+        end
     end
 end
 
@@ -224,6 +233,30 @@ function FXRoot:save_state()
     end
     return buffer
 end
+
+FXBranch = Node:new()
+function FXRoot:new()
+    local o = self.get_object()
+    o.ttype = 'FXRoot'
+    o.is_selected = true
+    self.__index = self
+    setmetatable(o, self)
+    return o
+end
+
+function FXRoot:__tostring()
+    return ('FXRoot %s'):format(self.id)
+end
+
+function FXRoot:save_state()
+    local buffer = serialize(self) .. '; '
+    for c, l in traverse_tree(self.children) do
+        buffer = buffer .. serialize(c) .. '; '
+    end
+    return buffer
+end
+
+
 
 local function get_constructor(ttype)
     if ttype == 'FXRoot' then
@@ -309,18 +342,23 @@ end
 ---@param plugin_name string
 ---@param position number
 ---@return table the TrackFX object
-function FXTree:add_fx_plugin(plugin_name, position)
+function FXTree:add_fx(plugin_name, position)
     position = position or -1
     position = 1000 + position
     return self.track:fx_add_by_name(plugin_name, false, -position)
 end
 
-function FXTree:add_gain_fx(position)
-    return self:add_fx_plugin('SideFX - Gain', position)
+function FXTree:add_gain(node)
+    local prev_fx_idx, position
+    prev_fx_idx = node:get_previous_fx_idx()
+    if prev_fx_idx ~= nil then
+        position = prev_fx_idx + 1
+    end
+    self.track:add_fx('SideFX - Gain', position)
 end
 
 function FXTree:add_summing_fx(position)
-    return self:add_fx_plugin('SideFX - Summing', position)
+    return self:add_fx('SideFX - Summing', position)
 end
 
 function FXTree:remove_fx(member)
@@ -340,33 +378,39 @@ end
 ---@param mode number : 0 for serial 1 for parallel
 function FXTree:operations_handler(member, mode, plugin)
     local leaf
+    ---Add FX
     if mode == 0 then
         if member:is_root() then
-            local fx_guid = self:add_fx_plugin(plugin.name):GUID()
+            local fx_guid = self:add_fx(plugin.name):GUID()
             leaf = FXLeaf:new(fx_guid)
             member:add_child(leaf)
         elseif member:is_node() then
             local member_idx = member.parent:get_child_idx(member)
             local previous_leaf = member:get_previous_leaf_sibling()
             if previous_leaf == nil then
-                local fx_guid = self:add_fx_plugin(plugin.name):GUID()
+                local fx_guid = self:add_fx(plugin.name):GUID()
                 leaf = FXLeaf:new(fx_guid)
                 member.parent:add_child(leaf)
             else
                 local last_fx_idx = previous_leaf:get_fx_idx()
-                local fx_guid = self:add_fx_plugin(plugin.name, last_fx_idx + 1):GUID()
+                local fx_guid = self:add_fx(plugin.name, last_fx_idx + 1):GUID()
                 leaf = FXLeaf:new(fx_guid, self.track)
                 member.parent:add_child(leaf, member_idx + 1)
             end
         else
             local member_idx = member.parent:get_child_idx(member)
             local fx_idx = member:get_fx_idx()
-            local fx_guid = self:add_fx_plugin(plugin.name, fx_idx + 1):GUID()
+            local fx_guid = self:add_fx(plugin.name, fx_idx + 1):GUID()
             leaf = FXLeaf:new(fx_guid)
             member.parent:add_child(leaf, member_idx + 1)
         end
+        ---Add parallel chain
     elseif mode == 1 then
-
+        if member:is_root() then
+            local node = FXNode:new()
+            member:add_child(node)
+            self:add_gain(node)
+        end
     end
     leaf.is_selected = true
     self:deselect_all_except(leaf)

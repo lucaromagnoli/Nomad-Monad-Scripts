@@ -1,17 +1,17 @@
-DEBUG = true
+local act_ctx = ({ reaper.get_action_context() })[2]
+local parent = act_ctx:match('(.+)SideFX/')
+package.path = package.path .. ';' .. parent .. '?.lua'
+package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
+package.path = package.path .. ';' .. parent .. 'SideFX/?.lua'
+require('ReaWrap.models.reaper')
+require('ReaWrap.models.project')
+require('ReaWrap.models.im_gui')
+require('FXTree')
 
-local path = ({ reaper.get_action_context() })[2]:match('^.+[\\//]')
-package.path = path .. "?.lua"
-
-require('ReaWrap.models')
-
-local r = Reaper:new()
-local project = Project:new()
-local gui = ImGui:new('ImGuiHelloWorld', 'sans-serif', 500, 200)
-local FLT_MIN, FLT_MAX = reaper.ImGui_NumericLimits_Float()
-local allow_double_click = reaper.ImGui_SelectableFlags_AllowDoubleClick()
-local current_idx = 1
-local selected_fx = nil
+local reawrap = Reaper:new()
+local fxtree = FXTree:new()
+local gui = ImGui:new('Side FX', ImGui:config_flags_docking_enable())
+local FLT_MIN, FLT_MAX = gui:numeric_limits_float()
 
 function is_selected_item_double_clicked(ctx, sel_fx)
     return sel_fx ~= nil

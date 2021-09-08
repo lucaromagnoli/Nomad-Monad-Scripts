@@ -27,8 +27,8 @@ local function main(opts)
             return
         else
             source_track = Track:from_media_item(media_item)
-            local hasvalidrsmpl = SourceTrackHasValidRsmplTrack(p, source_track)
-            if not SourceTrackHasValidRsmplTrack(p, source_track) then
+            local has_valid_rsmpl = SourceTrackHasValidRsmplTrack(p, source_track)
+            if not has_valid_rsmpl then
                 local confirm = msg_box(
                         'Would you like to create a new one?',
                         'No RSMPL track associated to sample track',

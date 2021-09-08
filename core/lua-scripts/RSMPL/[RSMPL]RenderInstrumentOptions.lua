@@ -14,7 +14,7 @@ local r = Reaper:new()
 local p = Project:new()
 local gui = ImGui:new('RSMPL - Render up to FX', 'sans-serif', 500, 200)
 local FLT_MIN, FLT_MAX = gui:numeric_limits_float()
-local allow_double_click = reaper.ImGui_SelectableFlags_AllowDoubleClick()
+local allow_double_click = gui:selectable_flags_allow_double_click()
 local current_idx = 1
 local selected_fx = nil
 
@@ -30,7 +30,7 @@ end
 function iter_fx_chain(ctx, fx_chain)
     for i, fx in ipairs(fx_chain) do
         local is_selected = current_idx == i
-        local _, is_selectable = gui:selectable(fx:get_name(), is_selected)
+        local is_selectable = gui:selectable(fx:get_name(), is_selected)
         if is_selectable then
             current_idx = i
         end

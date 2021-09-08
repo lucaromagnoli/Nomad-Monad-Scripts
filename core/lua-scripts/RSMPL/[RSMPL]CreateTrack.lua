@@ -1,6 +1,6 @@
--- @description Create new RSMPL Track from selected tracks
--- @author NomadMonad
--- @version 0.1a
+---@description Create new RSMPL Track from selected tracks
+---@author NomadMonad
+---@version 0.1a
 
 local act_ctx = ({ reaper.get_action_context() })[2]
 local parent = act_ctx:match('(.+)RSMPL/')
