@@ -11,16 +11,19 @@ package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
 require('ReaWrap.models')
 require('RSMPL.resample')
 
+local r = Reaper:new()
+local p = Project:new()
+
+
 local function main(opts)
-    local r = Reaper:new()
-    local p = Project:new()
+    
     if p:count_selected_tracks() == 0 then
         r:msg_box('Please select a track', 'Error', 0)
         return
     end
     for _, sel_track in ipairs(p:get_selected_tracks()) do
         if sel_track:has_instrument() then
-            bypass_render_reload(sel_track)
+            BypassRenderReload(sel_track)
         else
             r:msg_box('Track has no instrument to resample', 'Error', 0)
         end
