@@ -7,8 +7,6 @@ local parent = act_ctx:match('(.+)RSMPL/')
 package.path = package.path .. ';' .. parent .. '?.lua'
 package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
 require('ReaWrap.models')
-require('RSMPL.resample')
-
 
 local r = Reaper:new()
 
