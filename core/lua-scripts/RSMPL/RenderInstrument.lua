@@ -1,7 +1,7 @@
--- @description Render virtual instrument (without FX) to a new take
--- @author NomadMonad
--- @version 0.1a
---
+---@description Render virtual instrument (without FX) to a new take
+---@author NomadMonad
+---@version 0.1a
+
 local act_ctx = ({ reaper.get_action_context() })[2]
 local parent = act_ctx:match('(.+)RSMPL/')
 package.path = package.path .. ';' .. parent .. '?.lua'
