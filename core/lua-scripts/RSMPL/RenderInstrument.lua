@@ -6,7 +6,9 @@ local act_ctx = ({ reaper.get_action_context() })[2]
 local parent = act_ctx:match('(.+)RSMPL/')
 package.path = package.path .. ';' .. parent .. '?.lua'
 package.path = package.path .. ';' .. parent .. 'ReaWrap/models/?.lua'
-require('ReaWrap.models')
+
+local Reaper = require('ReaWrap.models.reaper')
+local Project = require('ReaWrap.models.project')
 
 local r = Reaper:new()
 
