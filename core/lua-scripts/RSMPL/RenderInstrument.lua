@@ -12,7 +12,7 @@ local Project = require('ReaWrap.models.project')
 
 local r = Reaper:new()
 
-function BypassFxChain(fx_chain)
+local function bypass_fx_chain(fx_chain)
     for _, fx in ipairs(fx_chain) do
         if not fx:is_instrument() then
             local is_enabled = tostring(fx:is_enabled())
@@ -21,8 +21,7 @@ function BypassFxChain(fx_chain)
         end
     end
 end
-
-function ReloadFXChain(fx_chain)
+local function reload_fx_chain(fx_chain)
     for _, fx in ipairs(fx_chain) do
         if not fx:is_instrument() then
             local old_state = fx:get_key_value('is_enabled') == 'true'
@@ -31,11 +30,11 @@ function ReloadFXChain(fx_chain)
     end
 end
 
-function BypassRenderReload(track)
+local function bypass_render_reload(track)
     local fx_chain = track:get_fx_chain()
-    BypassFxChain(fx_chain)
+    bypass_fx_chain(fx_chain)
     r:apply_fx()
-    ReloadFXChain(fx_chain)
+    reload_fx_chain(fx_chain)
 end
 
 
@@ -47,7 +46,7 @@ local function main(opts)
     end
     for _, sel_track in ipairs(p:get_selected_tracks()) do
         if sel_track:has_instrument() then
-            BypassRenderReload(sel_track)
+            bypass_render_reload(sel_track)
         else
             r:msg_box('Track has no instrument', 'Error', 0)
         end
